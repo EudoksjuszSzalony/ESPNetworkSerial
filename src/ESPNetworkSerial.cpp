@@ -198,6 +198,40 @@ void ESPNetworkSerialTCP::handle() {
   _client.setNoDelay(true);
 }
 
+bool ESPNetworkSerialTCP::waitForConnection() {
+  if (!_started) {
+    begin();
+  }
+
+  while (!connected()) {
+    delay(1);
+  }
+
+  return true;
+}
+
+bool ESPNetworkSerialTCP::waitForConnection(uint32_t timeoutMs) {
+  if (!_started) {
+    begin();
+  }
+
+  if (timeoutMs == 0) {
+    return connected();
+  }
+
+  const uint32_t startedAt = millis();
+
+  while (!connected()) {
+    if (static_cast<uint32_t>(millis() - startedAt) >= timeoutMs) {
+      return false;
+    }
+
+    delay(1);
+  }
+
+  return true;
+}
+
 bool ESPNetworkSerialTCP::started() const {
   return _started;
 }

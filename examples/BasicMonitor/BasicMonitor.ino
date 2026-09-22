@@ -2,9 +2,21 @@
 #include <ArduinoOTA.h>
 #include <ESPNetworkSerial.h>
 
-const char *WIFI_SSID = "YOUR_SSID";
-const char *WIFI_PASSWORD = "YOUR_PASSWORD";
+#if __has_include("secrets.h")
+#include "secrets.h"
+#else
+#include "secrets.example.h"
+#warning "Using placeholder Wi-Fi credentials. Copy secrets.example.h to secrets.h and fill in your Wi-Fi credentials."
+#endif
+
 const char *OTA_HOSTNAME = "espnetworkserial-test";
+
+// Optional boot-time monitor wait:
+//   0        = do not wait
+//   12000    = wait up to 12 seconds
+//   UINT32_MAX is not used here; call NetworkSerial.waitForConnection()
+//              with no argument if a monitor connection is mandatory.
+constexpr uint32_t NETWORK_SERIAL_WAIT_MS = 12000;
 
 ESPNetworkSerialTCP NetworkSerial;
 
@@ -13,7 +25,7 @@ void setup() {
   delay(200);
 
   WiFi.mode(WIFI_STA);
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  WiFi.begin(ESPNS_WIFI_SSID, ESPNS_WIFI_PASSWORD);
 
   Serial.print("Connecting to Wi-Fi");
   while (WiFi.status() != WL_CONNECTED) {
@@ -30,6 +42,22 @@ void setup() {
   // One API, two bidirectional streams.
   ESPSerial.addStream(Serial);
   ESPSerial.addStream(NetworkSerial);
+
+  if (NETWORK_SERIAL_WAIT_MS > 0) {
+    Serial.print("Waiting for Wi-Fi Serial Monitor (max ");
+    Serial.print(NETWORK_SERIAL_WAIT_MS);
+    Serial.println(" ms)...");
+
+    if (NetworkSerial.waitForConnection(NETWORK_SERIAL_WAIT_MS)) {
+      Serial.println("Wi-Fi Serial Monitor connected.");
+    } else {
+      Serial.println("Wi-Fi Serial Monitor wait timed out; continuing normally.");
+    }
+  }
+
+  // Alternative modes.
+  //   no wait:  remove the waitForConnection() call entirely
+  //   required: NetworkSerial.waitForConnection();
 
   ESPSerial.println();
   ESPSerial.println("ESPNetworkSerial BasicMonitor");

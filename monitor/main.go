@@ -18,10 +18,12 @@ import (
 
 const (
 	monitorName       = "ESPNetworkSerialMonitor"
-	monitorVersion    = "0.1.0-dev"
+	monitorVersion    = "0.1.1-dev"
 	protocolVersion   = 1
 	defaultDevicePort = "3233"
 	dialTimeout       = 4 * time.Second
+	reconnectGrace    = 15 * time.Second
+	reconnectInterval = 250 * time.Millisecond
 )
 
 type response struct {
@@ -61,8 +63,200 @@ func (o *jsonOutput) fail(event, message string) {
 	o.send(response{EventType: event, Message: message, Error: true})
 }
 
+type reconnectingTCP struct {
+	address           string
+	dialTimeout       time.Duration
+	reconnectGrace    time.Duration
+	reconnectInterval time.Duration
+
+	stateMu sync.Mutex
+	conn    net.Conn
+	closed  bool
+
+	reconnectMu sync.Mutex
+}
+
+func newReconnectingTCP(address string, initial net.Conn, grace time.Duration) *reconnectingTCP {
+	return &reconnectingTCP{
+		address:           address,
+		dialTimeout:       dialTimeout,
+		reconnectGrace:    grace,
+		reconnectInterval: reconnectInterval,
+		conn:              initial,
+	}
+}
+
+func (r *reconnectingTCP) current() (net.Conn, bool) {
+	r.stateMu.Lock()
+	defer r.stateMu.Unlock()
+
+	if r.closed {
+		return nil, false
+	}
+	return r.conn, r.conn != nil
+}
+
+func (r *reconnectingTCP) isClosed() bool {
+	r.stateMu.Lock()
+	defer r.stateMu.Unlock()
+	return r.closed
+}
+
+func (r *reconnectingTCP) invalidate(conn net.Conn) {
+	if conn == nil {
+		return
+	}
+
+	r.stateMu.Lock()
+	if r.conn == conn {
+		r.conn = nil
+	}
+	r.stateMu.Unlock()
+
+	_ = conn.Close()
+}
+
+func (r *reconnectingTCP) reconnect(deadline time.Time) (net.Conn, error) {
+	r.reconnectMu.Lock()
+	defer r.reconnectMu.Unlock()
+
+	if conn, ok := r.current(); ok {
+		return conn, nil
+	}
+	if r.isClosed() {
+		return nil, net.ErrClosed
+	}
+
+	fmt.Fprintf(os.Stderr, "%s: connection to %s lost; waiting up to %s for reconnect\n",
+		monitorName, r.address, time.Until(deadline).Round(time.Millisecond))
+
+	for {
+		if r.isClosed() {
+			return nil, net.ErrClosed
+		}
+
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			return nil, fmt.Errorf("reconnect timeout after %s", r.reconnectGrace)
+		}
+
+		timeout := r.dialTimeout
+		if remaining < timeout {
+			timeout = remaining
+		}
+
+		conn, err := net.DialTimeout("tcp", r.address, timeout)
+		if err == nil {
+			r.stateMu.Lock()
+			if r.closed {
+				r.stateMu.Unlock()
+				_ = conn.Close()
+				return nil, net.ErrClosed
+			}
+
+			if r.conn == nil {
+				r.conn = conn
+				r.stateMu.Unlock()
+				fmt.Fprintf(os.Stderr, "%s: reconnected to %s\n", monitorName, r.address)
+				return conn, nil
+			}
+
+			existing := r.conn
+			r.stateMu.Unlock()
+			_ = conn.Close()
+			return existing, nil
+		}
+
+		sleepFor := r.reconnectInterval
+		if remaining < sleepFor {
+			sleepFor = remaining
+		}
+		if sleepFor > 0 {
+			time.Sleep(sleepFor)
+		}
+	}
+}
+
+func (r *reconnectingTCP) connection(deadline *time.Time) (net.Conn, error) {
+	if conn, ok := r.current(); ok {
+		return conn, nil
+	}
+
+	if deadline.IsZero() {
+		*deadline = time.Now().Add(r.reconnectGrace)
+	}
+
+	return r.reconnect(*deadline)
+}
+
+func (r *reconnectingTCP) Read(p []byte) (int, error) {
+	var deadline time.Time
+
+	for {
+		conn, err := r.connection(&deadline)
+		if err != nil {
+			return 0, err
+		}
+
+		n, readErr := conn.Read(p)
+		if readErr == nil {
+			return n, nil
+		}
+
+		r.invalidate(conn)
+
+		if n > 0 {
+			return n, nil
+		}
+	}
+}
+
+func (r *reconnectingTCP) Write(p []byte) (int, error) {
+	total := 0
+	var deadline time.Time
+
+	for total < len(p) {
+		conn, err := r.connection(&deadline)
+		if err != nil {
+			return total, err
+		}
+
+		n, writeErr := conn.Write(p[total:])
+		total += n
+
+		if writeErr == nil {
+			if n == 0 {
+				return total, io.ErrShortWrite
+			}
+			continue
+		}
+
+		r.invalidate(conn)
+	}
+
+	return total, nil
+}
+
+func (r *reconnectingTCP) Close() error {
+	r.stateMu.Lock()
+	if r.closed {
+		r.stateMu.Unlock()
+		return nil
+	}
+
+	r.closed = true
+	conn := r.conn
+	r.conn = nil
+	r.stateMu.Unlock()
+
+	if conn != nil {
+		return conn.Close()
+	}
+	return nil
+}
+
 type session struct {
-	board  net.Conn
+	board  *reconnectingTCP
 	client net.Conn
 	once   sync.Once
 }
@@ -222,7 +416,7 @@ func (a *app) open(rest string) {
 		return
 	}
 
-	boardConn, err := net.DialTimeout("tcp", boardAddress, dialTimeout)
+	initialBoardConn, err := net.DialTimeout("tcp", boardAddress, dialTimeout)
 	if err != nil {
 		a.out.fail("open", fmt.Sprintf("could not connect to ESP32 at %s: %v", boardAddress, err))
 		return
@@ -230,11 +424,12 @@ func (a *app) open(rest string) {
 
 	clientConn, err := net.DialTimeout("tcp", clientAddress, dialTimeout)
 	if err != nil {
-		_ = boardConn.Close()
+		_ = initialBoardConn.Close()
 		a.out.fail("open", fmt.Sprintf("could not connect back to Arduino IDE at %s: %v", clientAddress, err))
 		return
 	}
 
+	boardConn := newReconnectingTCP(boardAddress, initialBoardConn, reconnectGrace)
 	s := &session{board: boardConn, client: clientConn}
 
 	a.mu.Lock()
@@ -250,8 +445,8 @@ func (a *app) open(rest string) {
 
 	a.out.ok("open")
 
-	go a.bridge(s, s.client, s.board, "Arduino IDE connection closed")
-	go a.bridge(s, s.board, s.client, "ESP32 connection closed")
+	go a.bridge(s, s.client, s.board, "ESP32 connection unavailable")
+	go a.bridge(s, s.board, s.client, "Arduino IDE connection closed")
 }
 
 func (a *app) bridge(s *session, dst io.Writer, src io.Reader, label string) {
@@ -344,14 +539,16 @@ func directMode(target string) error {
 		return err
 	}
 
-	conn, err := net.DialTimeout("tcp", address, dialTimeout)
+	initialConn, err := net.DialTimeout("tcp", address, dialTimeout)
 	if err != nil {
 		return fmt.Errorf("connect to %s: %w", address, err)
 	}
+
+	conn := newReconnectingTCP(address, initialConn, reconnectGrace)
 	defer conn.Close()
 
 	fmt.Fprintf(os.Stderr, "%s %s connected to %s\n", monitorName, monitorVersion, address)
-	fmt.Fprintln(os.Stderr, "Direct test mode: stdin/stdout are bridged to the ESP32. Press Ctrl+C to stop.")
+	fmt.Fprintf(os.Stderr, "Direct test mode: stdin/stdout are bridged to the ESP32; reconnect grace is %s. Press Ctrl+C to stop.\n", reconnectGrace)
 
 	errCh := make(chan error, 2)
 	go func() {

@@ -43,6 +43,13 @@ public:
   void end();
   void handle();
 
+  // Optional boot-time wait helpers:
+  //   no wait: do not call waitForConnection()
+  //   required: waitForConnection()
+  //   timeout: waitForConnection(12000)
+  bool waitForConnection();
+  bool waitForConnection(uint32_t timeoutMs);
+
   bool started() const;
   bool connected();
   uint16_t port() const;

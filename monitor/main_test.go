@@ -1,6 +1,11 @@
 package main
 
-import "testing"
+import (
+	"io"
+	"net"
+	"testing"
+	"time"
+)
 
 func TestNormalizeBoardAddress(t *testing.T) {
 	tests := []struct {
@@ -32,5 +37,63 @@ func TestNormalizeBoardAddress(t *testing.T) {
 func TestNormalizeBoardAddressRejectsEmpty(t *testing.T) {
 	if _, err := normalizeBoardAddress(""); err == nil {
 		t.Fatal("expected empty address to be rejected")
+	}
+}
+
+func TestReconnectingTCPReconnectsAfterBoardRestart(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+
+	serverErr := make(chan error, 1)
+	go func() {
+		for _, payload := range []string{"first\n", "second\n"} {
+			conn, acceptErr := listener.Accept()
+			if acceptErr != nil {
+				serverErr <- acceptErr
+				return
+			}
+
+			if _, writeErr := io.WriteString(conn, payload); writeErr != nil {
+				_ = conn.Close()
+				serverErr <- writeErr
+				return
+			}
+
+			_ = conn.Close()
+		}
+		serverErr <- nil
+	}()
+
+	initial, err := net.DialTimeout("tcp", listener.Addr().String(), time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	conn := newReconnectingTCP(listener.Addr().String(), initial, 2*time.Second)
+	conn.dialTimeout = 200 * time.Millisecond
+	conn.reconnectInterval = 10 * time.Millisecond
+	defer conn.Close()
+
+	first := make([]byte, len("first\n"))
+	if _, err := io.ReadFull(conn, first); err != nil {
+		t.Fatalf("first read failed: %v", err)
+	}
+	if string(first) != "first\n" {
+		t.Fatalf("first payload = %q", first)
+	}
+
+	second := make([]byte, len("second\n"))
+	if _, err := io.ReadFull(conn, second); err != nil {
+		t.Fatalf("reconnected read failed: %v", err)
+	}
+	if string(second) != "second\n" {
+		t.Fatalf("second payload = %q", second)
+	}
+
+	if err := <-serverErr; err != nil {
+		t.Fatalf("test server failed: %v", err)
 	}
 }
