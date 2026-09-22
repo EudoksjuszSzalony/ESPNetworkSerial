@@ -1,0 +1,33 @@
+name: Firmware CI
+
+on:
+  push:
+    paths:
+      - "src/**"
+      - "examples/**"
+      - "library.properties"
+      - ".github/workflows/firmware-ci.yml"
+  pull_request:
+    paths:
+      - "src/**"
+      - "examples/**"
+      - "library.properties"
+      - ".github/workflows/firmware-ci.yml"
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: arduino/setup-arduino-cli@v2
+
+      - name: Install ESP32 core 3.3.10
+        run: |
+          arduino-cli core update-index --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core install esp32:esp32@3.3.10 --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+
+      - name: Compile BasicMonitor
+        run: |
+          arduino-cli compile             --fqbn esp32:esp32:esp32             --library .             examples/BasicMonitor
