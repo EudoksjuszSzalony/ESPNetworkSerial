@@ -4,7 +4,7 @@
 
 ESPNetworkSerial aims to make network serial feel like ordinary Arduino Serial: select your ESP32 network port, open Serial Monitor, and communicate bidirectionally over Wi-Fi — while keeping OTA available on the same device.
 
-> **Status:** early development / pre-alpha. The initial firmware multiplexer and raw TCP transport prototype are now in-tree. The Arduino IDE host monitor and the final wire protocol are still being built.
+> **Status:** early development / pre-alpha. The firmware multiplexer, raw TCP transport, and first Arduino Pluggable Monitor host prototype are now in-tree. Native Arduino IDE integration is ready for development testing; the wire protocol and security layer are not final.
 
 ## Why
 
@@ -98,7 +98,7 @@ ESP32 sketch
 Arduino IDE <-> ESPNetworkSerialMonitor <-> ESP32
 ~~~
 
-The host monitor is planned in Go and will implement Arduino's Pluggable Monitor protocol.
+The host monitor is implemented in Go and speaks Arduino's Pluggable Monitor protocol over stdin/stdout. In development mode it bridges Arduino IDE's monitor connection to TCP port `3233` on the selected ESP32 network address.
 
 ## Repository layout
 
@@ -119,6 +119,7 @@ The Arduino library metadata and `src/` directory live at the repository root so
 - [Protocol specification](docs/protocol.md)
 - [Security](docs/security.md)
 - [Adding another transport](docs/adding-a-transport.md)
+- [Windows development setup](docs/development-setup.md)
 
 User-oriented installation and Getting Started guides will be added as the first working version lands. GitHub Wiki can then provide the friendly how-to layer, while `docs/` remains the versioned technical source of truth.
 
@@ -127,12 +128,14 @@ User-oriented installation and Getting Started guides will be added as the first
 - [x] Initial ESP32 `Stream` multiplexer
 - [x] Initial bidirectional TCP transport prototype
 - [x] Basic firmware example
-- [ ] Native Arduino IDE Serial Monitor integration
+- [x] Host-side Arduino Pluggable Monitor protocol prototype
+- [ ] Native Arduino IDE Serial Monitor integration verified end-to-end
 - [ ] Network port selected from Arduino IDE
-- [ ] Arduino OTA working simultaneously with the monitor
+- [ ] Arduino OTA + network monitor verified simultaneously in Arduino IDE
 - [ ] Authentication / finalized protocol handshake
 - [ ] Windows host binary / installer
-- [ ] CI compile checks and release builds
+- [x] Host monitor Go tests + cross-platform CI build workflow
+- [ ] Signed/tagged release builds
 - [ ] Protocol and extension-point stabilization
 
 ## License
