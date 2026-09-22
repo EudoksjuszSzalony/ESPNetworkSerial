@@ -11,6 +11,10 @@
 
 const char *OTA_HOSTNAME = "espnetworkserial-test";
 
+// Give ArduinoOTA more tolerance for brief Wi-Fi stalls than the ESP32 core
+// default. This only affects OTA receive timeout handling.
+constexpr uint32_t OTA_TIMEOUT_MS = 5000;
+
 // Optional boot-time monitor wait:
 //   0        = do not wait
 //   12000    = wait up to 12 seconds
@@ -35,6 +39,52 @@ void setup() {
   Serial.println();
 
   ArduinoOTA.setHostname(OTA_HOSTNAME);
+  ArduinoOTA.setTimeout(OTA_TIMEOUT_MS);
+
+  // OTA diagnostics go to USB Serial only, so diagnostics do not add traffic
+  // to the Wi-Fi Serial connection during an OTA transfer.
+  ArduinoOTA.onStart([]() {
+    Serial.print("[OTA] start, RSSI=");
+    Serial.print(WiFi.RSSI());
+    Serial.println(" dBm");
+  });
+
+  ArduinoOTA.onEnd([]() {
+    Serial.println("[OTA] complete");
+  });
+
+  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+    static int lastReported = -10;
+    const int percent =
+        total > 0 ? static_cast<int>((static_cast<uint64_t>(progress) * 100U) / total) : 0;
+
+    if (percent >= lastReported + 10 || percent == 100) {
+      lastReported = percent;
+      Serial.print("[OTA] progress=");
+      Serial.print(percent);
+      Serial.print("% RSSI=");
+      Serial.print(WiFi.RSSI());
+      Serial.println(" dBm");
+    }
+  });
+
+  ArduinoOTA.onError([](ota_error_t error) {
+    Serial.print("[OTA] error=");
+    Serial.print(static_cast<unsigned int>(error));
+    Serial.print(" (");
+
+    switch (error) {
+      case OTA_AUTH_ERROR: Serial.print("auth"); break;
+      case OTA_BEGIN_ERROR: Serial.print("begin"); break;
+      case OTA_CONNECT_ERROR: Serial.print("connect"); break;
+      case OTA_RECEIVE_ERROR: Serial.print("receive"); break;
+      case OTA_END_ERROR: Serial.print("end"); break;
+      default: Serial.print("unknown"); break;
+    }
+
+    Serial.println(")");
+  });
+
   ArduinoOTA.begin();
 
   NetworkSerial.begin();
@@ -43,6 +93,10 @@ void setup() {
   ESPSerial.addStream(Serial);
   ESPSerial.addStream(NetworkSerial);
 
+  // Connection wait modes live here, next to the actual call:
+  //   no wait:  remove this waitForConnection() block entirely
+  //   timed:    NetworkSerial.waitForConnection(12000)
+  //   required: NetworkSerial.waitForConnection()
   if (NETWORK_SERIAL_WAIT_MS > 0) {
     Serial.print("Waiting for Wi-Fi Serial Monitor (max ");
     Serial.print(NETWORK_SERIAL_WAIT_MS);
@@ -55,16 +109,19 @@ void setup() {
     }
   }
 
-  // Alternative modes.
-  //   no wait:  remove the waitForConnection() call entirely
-  //   required: NetworkSerial.waitForConnection();
 
   ESPSerial.println();
   ESPSerial.println("ESPNetworkSerial BasicMonitor");
   ESPSerial.print("IP: ");
   ESPSerial.println(WiFi.localIP());
+  ESPSerial.print("Wi-Fi RSSI: ");
+  ESPSerial.print(WiFi.RSSI());
+  ESPSerial.println(" dBm");
   ESPSerial.print("OTA hostname: ");
   ESPSerial.println(OTA_HOSTNAME);
+  ESPSerial.print("OTA receive timeout: ");
+  ESPSerial.print(OTA_TIMEOUT_MS);
+  ESPSerial.println(" ms");
   ESPSerial.print("TCP port: ");
   ESPSerial.println(NetworkSerial.port());
   ESPSerial.println(
@@ -80,7 +137,9 @@ void loop() {
   if (millis() - lastStatus >= 5000) {
     lastStatus = millis();
     ESPSerial.print("uptime_ms=");
-    ESPSerial.println(millis());
+    ESPSerial.print(millis());
+    ESPSerial.print(" rssi_dbm=");
+    ESPSerial.println(WiFi.RSSI());
   }
 
   // Input may arrive from USB Serial or from Arduino IDE over Wi-Fi.

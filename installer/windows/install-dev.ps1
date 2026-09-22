@@ -5,6 +5,10 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# Promptless OTA was an experiment. Keep this false so rerunning the installer
+# removes any older no-password OTA override and restores the normal ESP32 uploader.
+$PromptlessOTA = $false
+
 $platformBeginMarker = "# ESPNetworkSerial BEGIN"
 $platformEndMarker = "# ESPNetworkSerial END"
 $boardsBeginMarker = "# ESPNetworkSerial PROMPTLESS OTA BEGIN"
@@ -167,10 +171,6 @@ foreach ($version in $versions) {
 
 Write-Host ""
 Write-Host "ESPNetworkSerialMonitor development integration installed."
-if ($PromptlessOTA) {
-    Write-Warning "Promptless OTA is enabled for network uploads in the installed ESP32 core versions."
-    Write-Warning "Password-protected ArduinoOTA uploads will not work while this development override is enabled."
-    Write-Host "Run this installer again without -PromptlessOTA to restore the core's normal password-capable OTA recipe."
-}
+Write-Host "ArduinoOTA uses the normal ESP32 password-capable upload recipe."
 Write-Host "Restart Arduino IDE before testing."
 Write-Host "If the ESP32 core is updated later, run this installer again for the new core version."

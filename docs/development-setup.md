@@ -40,24 +40,13 @@ It refuses to overwrite a different existing `pluggable_monitor.pattern.network`
 
 Restart Arduino IDE after installation.
 
-### Optional: remove Arduino IDE's unnecessary OTA password prompt
+### ArduinoOTA password prompt
 
-For sketches that intentionally use ArduinoOTA **without a password**, development mode can install a second upload recipe that does not declare an upload password field:
+The ESP32 core's network upload recipe declares a `Password` user field statically. Arduino IDE/CLI currently gets user fields from the selected upload-tool recipe before the upload starts; the field list is not conditional on the discovered device's `auth_upload=no` property.
 
-~~~powershell
-.\installer\windows\install-dev.ps1 -PromptlessOTA
-~~~
+So the ESPNetworkSerial development installer now leaves the stock ESP32 OTA uploader intact. For a no-password ArduinoOTA sketch, enter any placeholder value once (for example `x`). Arduino IDE currently remembers that field for later uploads.
 
-After restarting Arduino IDE, network upload should start directly instead of showing the `Configure and Upload -> Password` dialog.
-
-This is deliberately opt-in because Arduino chooses an upload tool by port protocol, not per-device `auth_upload` capability. While `-PromptlessOTA` is enabled, password-protected ArduinoOTA uploads in that ESP32 core will not work.
-
-To restore the normal password-capable ESP32 OTA recipe while keeping ESPNetworkSerialMonitor installed, rerun:
-
-~~~powershell
-.\installer\windows\install-dev.ps1
-~~~
-
+A previous ESPNetworkSerial development experiment removed the prompt by replacing the network upload tool with a no-password-only recipe. That also disabled password-protected ArduinoOTA, so the experiment was dropped. Rerunning the current installer cleans up that obsolete override automatically.
 ## 3. Create local Wi-Fi credentials once
 
 In:
@@ -100,7 +89,7 @@ The example starts both:
 - ArduinoOTA, which advertises the ESP32 as Arduino's normal `network` port via mDNS;
 - ESPNetworkSerial TCP on port `3233`.
 
-By default the example waits up to 12 seconds for a Wi-Fi Serial Monitor connection before printing the main startup banner. This gives the monitor time to attach and capture early logs without permanently blocking an unattended board.
+By default the example waits up to 12 seconds for a Wi-Fi Serial Monitor connection before printing the main startup banner. This gives the monitor time to attach and capture early logs without permanently blocking an unattended board. BasicMonitor also sets ArduinoOTA's receive timeout to 5000 ms (the ESP32 core default is 1000 ms) to tolerate brief Wi-Fi stalls during upload.
 
 The firmware API supports three practical modes:
 
@@ -145,6 +134,22 @@ The example prints an uptime line every five seconds. Text sent from Arduino IDE
 
 USB Serial stays enabled at the same time, so the same `ESPSerial.println(...)` output is visible over both transports.
 
+## OTA reliability diagnostics
+
+BasicMonitor prints the Feather's own Wi-Fi RSSI in the startup banner and every five seconds, so OTA failures can be correlated with the signal seen by the actual target board.
+
+OTA callbacks also print start/progress/error diagnostics to **USB Serial only**. Keeping those diagnostics off the Wi-Fi Serial stream avoids adding extra network traffic during the firmware transfer.
+
+The ESP32 Arduino OTA receiver normally uses a 1000 ms receive timeout. BasicMonitor raises this to 5000 ms:
+
+~~~cpp
+ArduinoOTA.setTimeout(5000);
+~~~
+
+This does not repair a broken radio link, but it gives brief packet-loss or scheduling stalls more time to recover before the OTA receiver aborts.
+
+On Windows, the first OTA attempt can also be interrupted while the firewall asks whether to allow the OTA uploader. Allow it and retry. Repeated mid-transfer `WinError 10053` or `timed out` failures should be treated as a transport/reliability problem rather than a password problem.
+
 ## Reconnect test
 
 With the Wi-Fi Serial Monitor open, reset the ESP32.
@@ -179,5 +184,4 @@ The script removes only the block managed by ESPNetworkSerial.
 - One network monitor client at a time.
 - Reconnect currently retries the same discovered IP address; DHCP address changes during the reconnect window are not followed yet.
 - The `network` -> monitor binding is installed per ESP32 core version; rerun the installer after a core update.
-- `-PromptlessOTA` is intentionally a development-only override and applies to ESP32 network uploads for the installed core version, not only to one sketch.
 - This development workflow is not the intended final end-user installer.
