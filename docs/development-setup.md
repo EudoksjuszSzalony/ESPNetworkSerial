@@ -136,7 +136,7 @@ USB Serial stays enabled at the same time, so the same `ESPSerial.println(...)` 
 
 ## OTA reliability diagnostics
 
-BasicMonitor prints the Feather's own Wi-Fi RSSI in the startup banner and every five seconds, so OTA failures can be correlated with the signal seen by the actual target board.
+BasicMonitor prints the Feather's own Wi-Fi RSSI in the startup banner and every five seconds, so OTA failures can be correlated with the signal seen by the actual target board. For development testing it also disables ESP32 Wi-Fi modem sleep and explicitly enables auto-reconnect, favoring connection stability over power saving.
 
 OTA callbacks also print start/progress/error diagnostics to **USB Serial only**. Keeping those diagnostics off the Wi-Fi Serial stream avoids adding extra network traffic during the firmware transfer.
 
@@ -148,7 +148,7 @@ ArduinoOTA.setTimeout(5000);
 
 This does not repair a broken radio link, but it gives brief packet-loss or scheduling stalls more time to recover before the OTA receiver aborts.
 
-On Windows, the first OTA attempt can also be interrupted while the firewall asks whether to allow the OTA uploader. Allow it and retry. Repeated mid-transfer `WinError 10053` or `timed out` failures should be treated as a transport/reliability problem rather than a password problem.
+On Windows, the first OTA attempt can also be interrupted while the firewall asks whether to allow the OTA uploader. Allow it and retry. Repeated mid-transfer `WinError 10053` or `timed out` failures should be treated as a transport/reliability problem rather than a password problem. USB Serial also logs Wi-Fi disconnect reason codes, which helps distinguish an actual STA/AP disconnect from an OTA socket timeout.
 
 ## Reconnect test
 

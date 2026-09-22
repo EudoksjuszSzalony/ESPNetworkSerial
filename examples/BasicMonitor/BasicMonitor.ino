@@ -15,6 +15,10 @@ const char *OTA_HOSTNAME = "espnetworkserial-test";
 // default. This only affects OTA receive timeout handling.
 constexpr uint32_t OTA_TIMEOUT_MS = 5000;
 
+// For development/testing, favor Wi-Fi latency/reliability over power saving.
+// ESP32 modem sleep can be re-enabled later if low power matters more.
+constexpr bool WIFI_DISABLE_SLEEP = true;
+
 // Optional boot-time monitor wait:
 //   0        = do not wait
 //   12000    = wait up to 12 seconds
@@ -28,7 +32,25 @@ void setup() {
   Serial.begin(115200);
   delay(200);
 
+  WiFi.onEvent(
+      [](WiFiEvent_t event, WiFiEventInfo_t info) {
+        Serial.print("[WiFi] disconnected, reason=");
+        Serial.println(info.wifi_sta_disconnected.reason);
+      },
+      WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
+
+  WiFi.onEvent(
+      [](WiFiEvent_t event, WiFiEventInfo_t info) {
+        Serial.print("[WiFi] got IP: ");
+        Serial.println(IPAddress(info.got_ip.ip_info.ip.addr));
+      },
+      WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_GOT_IP);
+
   WiFi.mode(WIFI_STA);
+  WiFi.setAutoReconnect(true);
+  if (WIFI_DISABLE_SLEEP) {
+    WiFi.setSleep(false);
+  }
   WiFi.begin(ESPNS_WIFI_SSID, ESPNS_WIFI_PASSWORD);
 
   Serial.print("Connecting to Wi-Fi");
@@ -114,6 +136,8 @@ void setup() {
   ESPSerial.println("ESPNetworkSerial BasicMonitor");
   ESPSerial.print("IP: ");
   ESPSerial.println(WiFi.localIP());
+  ESPSerial.print("Wi-Fi sleep: ");
+  ESPSerial.println(WIFI_DISABLE_SLEEP ? "disabled" : "enabled");
   ESPSerial.print("Wi-Fi RSSI: ");
   ESPSerial.print(WiFi.RSSI());
   ESPSerial.println(" dBm");
