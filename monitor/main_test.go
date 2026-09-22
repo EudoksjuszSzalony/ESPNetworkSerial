@@ -58,6 +58,24 @@ func TestReconnectingTCPReconnectsAfterBoardRestart(t *testing.T) {
 				return
 			}
 
+			reader := bufio.NewReader(conn)
+			hello, readErr := reader.ReadString('\n')
+			if readErr != nil {
+				_ = conn.Close()
+				serverErr <- readErr
+				return
+			}
+			if hello != espnsHelloLine {
+				_ = conn.Close()
+				serverErr <- fmt.Errorf("unexpected ESPNS hello %q", hello)
+				return
+			}
+
+			if _, writeErr := io.WriteString(conn, espnsOKLine+" auth=none mode=raw\n"); writeErr != nil {
+				_ = conn.Close()
+				serverErr <- writeErr
+				return
+			}
 			if _, writeErr := io.WriteString(conn, payload); writeErr != nil {
 				_ = conn.Close()
 				serverErr <- writeErr
@@ -69,7 +87,7 @@ func TestReconnectingTCPReconnectsAfterBoardRestart(t *testing.T) {
 		serverErr <- nil
 	}()
 
-	initial, err := net.DialTimeout("tcp", listener.Addr().String(), time.Second)
+	initial, err := dialESPNS(listener.Addr().String(), time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
