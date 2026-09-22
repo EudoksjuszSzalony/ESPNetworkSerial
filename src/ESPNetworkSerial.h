@@ -20,7 +20,19 @@
 #endif
 
 #ifndef ESPNETWORKSERIAL_HANDSHAKE_MAX_LENGTH
-#define ESPNETWORKSERIAL_HANDSHAKE_MAX_LENGTH 96
+#define ESPNETWORKSERIAL_HANDSHAKE_MAX_LENGTH 256
+#endif
+
+#ifndef ESPNETWORKSERIAL_AUTH_KEY_MIN_LENGTH
+#define ESPNETWORKSERIAL_AUTH_KEY_MIN_LENGTH 16
+#endif
+
+#ifndef ESPNETWORKSERIAL_AUTH_KEY_MAX_LENGTH
+#define ESPNETWORKSERIAL_AUTH_KEY_MAX_LENGTH 128
+#endif
+
+#ifndef ESPNETWORKSERIAL_AUTH_NONCE_SIZE
+#define ESPNETWORKSERIAL_AUTH_NONCE_SIZE 16
 #endif
 
 class ESPNetworkSerialMux : public Stream {
@@ -55,6 +67,12 @@ public:
   void end();
   void handle();
 
+  // Optional ESPNS mutual authentication. The key is independent from any
+  // ArduinoOTA password. A configured key requires HMAC-SHA256 authentication.
+  bool setAuthKey(const char *key);
+  void clearAuthKey();
+  bool authenticationEnabled() const;
+
   // Optional boot-time wait helpers:
   //   no wait: do not call waitForConnection()
   //   required: waitForConnection()
@@ -77,17 +95,35 @@ public:
   void flush() override;
 
 private:
+  enum class HandshakeState : uint8_t {
+    WaitingHello,
+    WaitingAuth,
+    Ready,
+  };
+
   void resetProtocolState();
+  void resetHandshakeLine();
   void handleHandshake();
+  void processHandshakeLine();
+  void closeProtocolClient();
+  void beginAuthChallenge(const char *clientNonceHex);
+  bool verifyClientProof(const char *proofHex);
+  bool computeHmac(const char *role, uint8_t output[32]) const;
 
   uint16_t _port;
   WiFiServer _server;
   WiFiClient _client;
   bool _started;
   bool _protocolReady;
+  HandshakeState _handshakeState;
   uint32_t _handshakeStartedAt;
   size_t _handshakeLength;
   char _handshakeBuffer[ESPNETWORKSERIAL_HANDSHAKE_MAX_LENGTH];
+
+  char _authKey[ESPNETWORKSERIAL_AUTH_KEY_MAX_LENGTH + 1];
+  size_t _authKeyLength;
+  char _clientNonceHex[(ESPNETWORKSERIAL_AUTH_NONCE_SIZE * 2) + 1];
+  char _serverNonceHex[(ESPNETWORKSERIAL_AUTH_NONCE_SIZE * 2) + 1];
 };
 
 extern ESPNetworkSerialMux ESPSerial;

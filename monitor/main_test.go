@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strings"
 	"testing"
 	"time"
 )
@@ -65,7 +66,7 @@ func TestReconnectingTCPReconnectsAfterBoardRestart(t *testing.T) {
 				serverErr <- readErr
 				return
 			}
-			if hello != espnsHelloLine {
+			if !strings.HasPrefix(hello, "ESPNS/1 HELLO nonce=") {
 				_ = conn.Close()
 				serverErr <- fmt.Errorf("unexpected ESPNS hello %q", hello)
 				return
@@ -87,12 +88,12 @@ func TestReconnectingTCPReconnectsAfterBoardRestart(t *testing.T) {
 		serverErr <- nil
 	}()
 
-	initial, err := dialESPNS(listener.Addr().String(), time.Second)
+	initial, err := dialESPNS(listener.Addr().String(), time.Second, authSettings{})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	conn := newReconnectingTCP(listener.Addr().String(), initial, 2*time.Second)
+	conn := newReconnectingTCP(listener.Addr().String(), initial, 2*time.Second, authSettings{})
 	conn.dialTimeout = 200 * time.Millisecond
 	conn.reconnectInterval = 10 * time.Millisecond
 	defer conn.Close()

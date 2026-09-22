@@ -109,6 +109,15 @@ void setup() {
 
   ArduinoOTA.begin();
 
+#ifdef ESPNS_AUTH_KEY
+  if (!NetworkSerial.setAuthKey(ESPNS_AUTH_KEY)) {
+    Serial.println("FATAL: ESPNS_AUTH_KEY must be 16..128 bytes.");
+    while (true) {
+      delay(1000);
+    }
+  }
+#endif
+
   NetworkSerial.begin();
 
   // One API, two bidirectional streams.
@@ -148,6 +157,8 @@ void setup() {
   ESPSerial.println(" ms");
   ESPSerial.print("TCP port: ");
   ESPSerial.println(NetworkSerial.port());
+  ESPSerial.print("ESPNS auth: ");
+  ESPSerial.println(NetworkSerial.authenticationEnabled() ? "hmac-sha256" : "none");
   ESPSerial.println(
       "Pre-alpha transport: unauthenticated plaintext TCP. "
       "Use only on a trusted LAN.");

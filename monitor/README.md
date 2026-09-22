@@ -15,6 +15,26 @@ The monitor is implemented in Go using only the standard library. It implements 
 
 For `network` ports, `OPEN` connects to the selected ESP32 address on TCP port `3233` and bridges bytes bidirectionally to Arduino IDE's callback connection.
 
+## ESPNS authentication
+
+The monitor supports optional mutual HMAC-SHA256 authentication.
+
+Generate a random 32-byte development key:
+
+~~~powershell
+.\espnetworkserial-monitor.exe --generate-key
+~~~
+
+Copy `config.example.json` to `config.json` next to the executable and place the generated text in `authKey`. `monitor/config.json` is ignored by Git.
+
+Configure the exact same text on the ESP32 side through `ESPNS_AUTH_KEY` / `NetworkSerial.setAuthKey(...)`.
+
+When a host key is configured, an `auth=none` endpoint is rejected by default to avoid silent downgrade. `allowUnauthenticated=true` can deliberately relax that behavior for mixed development environments.
+
+The environment variables `ESPNS_AUTH_KEY`, `ESPNS_ALLOW_UNAUTHENTICATED`, and `ESPNS_CONFIG` can override file-based configuration.
+
+Authentication controls access to the endpoint, but the current `mode=raw` serial stream remains plaintext and is not integrity-protected after the handshake.
+
 ## Reconnect grace
 
 A temporary ESP32 disconnect no longer immediately tears down the Arduino IDE monitor session.
@@ -51,4 +71,4 @@ GitHub Actions runs Go tests and cross-builds standalone binaries for Windows am
 
 ## Current security status
 
-The transport is still pre-alpha plaintext TCP without authentication. Use it only on a trusted LAN until the protocol/security layer is implemented.
+Optional mutual HMAC-SHA256 authentication is implemented. The post-handshake serial data channel is still plaintext TCP without confidentiality or stream integrity, so sensitive deployments should still treat the current transport as trusted-LAN only.

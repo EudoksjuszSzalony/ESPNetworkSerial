@@ -18,7 +18,7 @@ import (
 
 const (
 	monitorName       = "ESPNetworkSerialMonitor"
-	monitorVersion    = "0.2.0-dev"
+	monitorVersion    = "0.3.0-dev"
 	protocolVersion   = 1
 	defaultDevicePort = "3233"
 	dialTimeout       = 4 * time.Second
@@ -68,6 +68,7 @@ type reconnectingTCP struct {
 	dialTimeout       time.Duration
 	reconnectGrace    time.Duration
 	reconnectInterval time.Duration
+	auth              authSettings
 
 	stateMu sync.Mutex
 	conn    net.Conn
@@ -76,12 +77,13 @@ type reconnectingTCP struct {
 	reconnectMu sync.Mutex
 }
 
-func newReconnectingTCP(address string, initial net.Conn, grace time.Duration) *reconnectingTCP {
+func newReconnectingTCP(address string, initial net.Conn, grace time.Duration, auth authSettings) *reconnectingTCP {
 	return &reconnectingTCP{
 		address:           address,
 		dialTimeout:       dialTimeout,
 		reconnectGrace:    grace,
 		reconnectInterval: reconnectInterval,
+		auth:              auth,
 		conn:              initial,
 	}
 }
@@ -145,7 +147,7 @@ func (r *reconnectingTCP) reconnect(deadline time.Time) (net.Conn, error) {
 			timeout = remaining
 		}
 
-		conn, err := dialESPNS(r.address, timeout)
+		conn, err := dialESPNS(r.address, timeout, r.auth)
 		if err == nil {
 			r.stateMu.Lock()
 			if r.closed {
@@ -262,15 +264,16 @@ type session struct {
 }
 
 type app struct {
-	out *jsonOutput
+	out  *jsonOutput
+	auth authSettings
 
 	mu          sync.Mutex
 	initialized bool
 	active      *session
 }
 
-func newApp(out io.Writer) *app {
-	return &app{out: newJSONOutput(out)}
+func newApp(out io.Writer, auth authSettings) *app {
+	return &app{out: newJSONOutput(out), auth: auth}
 }
 
 func (a *app) run(in io.Reader) error {
@@ -416,7 +419,7 @@ func (a *app) open(rest string) {
 		return
 	}
 
-	initialBoardConn, err := dialESPNS(boardAddress, dialTimeout)
+	initialBoardConn, err := dialESPNS(boardAddress, dialTimeout, a.auth)
 	if err != nil {
 		a.out.fail("open", fmt.Sprintf("could not connect to ESP32 at %s: %v", boardAddress, err))
 		return
@@ -429,7 +432,7 @@ func (a *app) open(rest string) {
 		return
 	}
 
-	boardConn := newReconnectingTCP(boardAddress, initialBoardConn, reconnectGrace)
+	boardConn := newReconnectingTCP(boardAddress, initialBoardConn, reconnectGrace, a.auth)
 	s := &session{board: boardConn, client: clientConn}
 
 	a.mu.Lock()
@@ -533,18 +536,18 @@ func normalizeBoardAddress(boardPort string) (string, error) {
 	return net.JoinHostPort(boardPort, defaultDevicePort), nil
 }
 
-func directMode(target string) error {
+func directMode(target string, auth authSettings) error {
 	address, err := normalizeBoardAddress(target)
 	if err != nil {
 		return err
 	}
 
-	initialConn, err := dialESPNS(address, dialTimeout)
+	initialConn, err := dialESPNS(address, dialTimeout, auth)
 	if err != nil {
 		return fmt.Errorf("connect to %s: %w", address, err)
 	}
 
-	conn := newReconnectingTCP(address, initialConn, reconnectGrace)
+	conn := newReconnectingTCP(address, initialConn, reconnectGrace, auth)
 	defer conn.Close()
 
 	fmt.Fprintf(os.Stderr, "%s %s connected to %s\n", monitorName, monitorVersion, address)
@@ -570,6 +573,7 @@ func directMode(target string) error {
 func main() {
 	connect := flag.String("connect", "", "directly connect to an ESP32 address for transport testing (host or host:port)")
 	showVersion := flag.Bool("version", false, "print version and exit")
+	generateKey := flag.Bool("generate-key", false, "generate a random 32-byte ESPNS authentication key and exit")
 	flag.Parse()
 
 	if *showVersion {
@@ -577,15 +581,34 @@ func main() {
 		return
 	}
 
+	if *generateKey {
+		key, err := generateAuthKeyHex(32)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "error:", err)
+			os.Exit(1)
+		}
+		fmt.Println(key)
+		return
+	}
+
+	auth, err := loadAuthSettings()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "authentication configuration error:", err)
+		os.Exit(1)
+	}
+	if auth.enabled() {
+		fmt.Fprintf(os.Stderr, "%s: hmac-sha256 authentication configured from %s\n", monitorName, auth.source)
+	}
+
 	if *connect != "" {
-		if err := directMode(*connect); err != nil {
+		if err := directMode(*connect, auth); err != nil {
 			fmt.Fprintln(os.Stderr, "error:", err)
 			os.Exit(1)
 		}
 		return
 	}
 
-	application := newApp(os.Stdout)
+	application := newApp(os.Stdout, auth)
 	if err := application.run(os.Stdin); err != nil {
 		fmt.Fprintln(os.Stderr, "monitor error:", err)
 		os.Exit(1)

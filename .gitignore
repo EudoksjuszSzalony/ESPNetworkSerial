@@ -18,6 +18,7 @@ out/
 # Local credentials / machine-specific secrets
 **/secrets.h
 **/secrets.local.h
+monitor/config.json
 
 # IDE / editor
 .vscode/

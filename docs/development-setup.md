@@ -47,6 +47,7 @@ The ESP32 core's network upload recipe declares a `Password` user field statical
 So the ESPNetworkSerial development installer now leaves the stock ESP32 OTA uploader intact. For a no-password ArduinoOTA sketch, enter any placeholder value once (for example `x`). Arduino IDE currently remembers that field for later uploads.
 
 A previous ESPNetworkSerial development experiment removed the prompt by replacing the network upload tool with a no-password-only recipe. That also disabled password-protected ArduinoOTA, so the experiment was dropped. Rerunning the current installer cleans up that obsolete override automatically.
+
 ## 3. Create local Wi-Fi credentials once
 
 In:
@@ -75,6 +76,31 @@ and edit the copy:
 ~~~
 
 `secrets.h` is ignored by Git, so pulling/updating the repository does not require re-entering credentials and the credentials are not committed accidentally.
+
+### Optional: enable ESPNS authentication
+
+Build the monitor first, then generate a random key:
+
+~~~powershell
+.\monitor\espnetworkserial-monitor.exe --generate-key
+~~~
+
+Add the generated text to local `secrets.h`:
+
+~~~cpp
+#define ESPNS_AUTH_KEY "PASTE_GENERATED_KEY_HERE"
+~~~
+
+Copy `monitor/config.example.json` to `monitor/config.json` and put the **same** text in `authKey`:
+
+~~~json
+{
+  "authKey": "PASTE_GENERATED_KEY_HERE",
+  "allowUnauthenticated": false
+}
+~~~
+
+`monitor/config.json` is also ignored by Git. ESPNS authentication is separate from Wi-Fi security and from any ArduinoOTA password.
 
 ## 4. Flash the BasicMonitor example over USB once
 
@@ -180,7 +206,7 @@ The script removes only the block managed by ESPNetworkSerial.
 
 ## Current limitations
 
-- Pre-alpha raw TCP transport; no authentication or encryption yet.
+- Optional mutual HMAC-SHA256 authentication is available, but the raw serial stream is not encrypted or integrity-protected after the handshake.
 - One network monitor client at a time.
 - Reconnect currently retries the same discovered IP address; DHCP address changes during the reconnect window are not followed yet.
 - The `network` -> monitor binding is installed per ESP32 core version; rerun the installer after a core update.

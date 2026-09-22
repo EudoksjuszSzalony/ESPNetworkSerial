@@ -4,7 +4,7 @@
 
 ESPNetworkSerial aims to make network serial feel like ordinary Arduino Serial: select your ESP32 network port, open Serial Monitor, and communicate bidirectionally over Wi-Fi — while keeping OTA available on the same device.
 
-> **Status:** early development / pre-alpha. The firmware multiplexer, raw TCP transport, native Arduino Pluggable Monitor host prototype, boot-time connection waiting, and short reconnect recovery are now in-tree. The wire protocol and security layer are not final.
+> **Status:** early development / pre-alpha. Native Arduino IDE monitoring, OTA coexistence, reconnect recovery, ESPNS v1 endpoint identification, and optional mutual HMAC-SHA256 authentication are now implemented. The encrypted data-channel design is not final.
 
 ## Why
 
@@ -98,6 +98,35 @@ examples/BasicMonitor/secrets.h
 
 and fill in your SSID/password once. `secrets.h` is ignored by Git.
 
+## Optional authentication
+
+ESPNetworkSerial can require mutual HMAC-SHA256 authentication before the serial stream opens.
+
+Generate a development key:
+
+~~~powershell
+.\monitor\espnetworkserial-monitor.exe --generate-key
+~~~
+
+Put the same key in the sketch's local `secrets.h`:
+
+~~~cpp
+#define ESPNS_AUTH_KEY "PASTE_GENERATED_KEY_HERE"
+~~~
+
+and in local `monitor/config.json` (copy `monitor/config.example.json` first):
+
+~~~json
+{
+  "authKey": "PASTE_GENERATED_KEY_HERE",
+  "allowUnauthenticated": false
+}
+~~~
+
+Both files containing local credentials are excluded from Git.
+
+Authentication is mutual and replay-resistant, but the current raw serial stream remains plaintext TCP. See [Security](docs/security.md) for the exact guarantees and limitations.
+
 ## Reconnect behavior
 
 The host monitor now keeps the Arduino IDE monitor session alive while the ESP32 temporarily disappears and retries the TCP connection for a short grace period (currently 15 seconds). This is intended to cover common board resets and brief Wi-Fi interruptions without forcing the Serial Monitor tab to be closed and reopened.
@@ -170,8 +199,10 @@ GitHub Wiki can provide the friendly how-to layer, while `docs/` remains the ver
 - [x] Boot-time `waitForConnection()` API
 - [x] Short automatic reconnect grace after ESP32 disconnect/reset
 - [x] Local Git-ignored Wi-Fi credentials for examples
-- [ ] Arduino OTA + network monitor verified simultaneously during upload/reset
-- [ ] Authentication / finalized protocol handshake
+- [x] ESPNS v1 endpoint/version handshake
+- [x] Arduino OTA + network monitor verified simultaneously during upload/reset
+- [x] Optional mutual HMAC-SHA256 authentication handshake
+- [ ] Encrypted / integrity-protected serial transport
 - [ ] Windows end-user installer
 - [x] Host monitor Go tests + cross-platform CI build workflow
 - [ ] Signed/tagged release builds
