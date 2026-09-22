@@ -18,7 +18,7 @@ import (
 
 const (
 	monitorName       = "ESPNetworkSerialMonitor"
-	monitorVersion    = "0.1.1-dev"
+	monitorVersion    = "0.2.0-dev"
 	protocolVersion   = 1
 	defaultDevicePort = "3233"
 	dialTimeout       = 4 * time.Second
@@ -145,7 +145,7 @@ func (r *reconnectingTCP) reconnect(deadline time.Time) (net.Conn, error) {
 			timeout = remaining
 		}
 
-		conn, err := net.DialTimeout("tcp", r.address, timeout)
+		conn, err := dialESPNS(r.address, timeout)
 		if err == nil {
 			r.stateMu.Lock()
 			if r.closed {
@@ -416,7 +416,7 @@ func (a *app) open(rest string) {
 		return
 	}
 
-	initialBoardConn, err := net.DialTimeout("tcp", boardAddress, dialTimeout)
+	initialBoardConn, err := dialESPNS(boardAddress, dialTimeout)
 	if err != nil {
 		a.out.fail("open", fmt.Sprintf("could not connect to ESP32 at %s: %v", boardAddress, err))
 		return
@@ -539,7 +539,7 @@ func directMode(target string) error {
 		return err
 	}
 
-	initialConn, err := net.DialTimeout("tcp", address, dialTimeout)
+	initialConn, err := dialESPNS(address, dialTimeout)
 	if err != nil {
 		return fmt.Errorf("connect to %s: %w", address, err)
 	}

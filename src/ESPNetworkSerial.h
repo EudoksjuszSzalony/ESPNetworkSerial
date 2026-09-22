@@ -11,6 +11,18 @@
 #define ESPNETWORKSERIAL_DEFAULT_PORT 3233
 #endif
 
+#ifndef ESPNETWORKSERIAL_PROTOCOL_VERSION
+#define ESPNETWORKSERIAL_PROTOCOL_VERSION 1
+#endif
+
+#ifndef ESPNETWORKSERIAL_HANDSHAKE_TIMEOUT_MS
+#define ESPNETWORKSERIAL_HANDSHAKE_TIMEOUT_MS 2500
+#endif
+
+#ifndef ESPNETWORKSERIAL_HANDSHAKE_MAX_LENGTH
+#define ESPNETWORKSERIAL_HANDSHAKE_MAX_LENGTH 96
+#endif
+
 class ESPNetworkSerialMux : public Stream {
 public:
   ESPNetworkSerialMux();
@@ -65,10 +77,17 @@ public:
   void flush() override;
 
 private:
+  void resetProtocolState();
+  void handleHandshake();
+
   uint16_t _port;
   WiFiServer _server;
   WiFiClient _client;
   bool _started;
+  bool _protocolReady;
+  uint32_t _handshakeStartedAt;
+  size_t _handshakeLength;
+  char _handshakeBuffer[ESPNETWORKSERIAL_HANDSHAKE_MAX_LENGTH];
 };
 
 extern ESPNetworkSerialMux ESPSerial;

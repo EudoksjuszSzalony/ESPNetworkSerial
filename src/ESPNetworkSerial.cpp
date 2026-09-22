@@ -148,7 +148,14 @@ void ESPNetworkSerialMux::flush() {
 }
 
 ESPNetworkSerialTCP::ESPNetworkSerialTCP(uint16_t port)
-    : _port(port), _server(port), _client(), _started(false) {}
+    : _port(port),
+      _server(port),
+      _client(),
+      _started(false),
+      _protocolReady(false),
+      _handshakeStartedAt(0),
+      _handshakeLength(0),
+      _handshakeBuffer{} {}
 
 void ESPNetworkSerialTCP::begin() {
   if (_started) {
@@ -163,10 +170,64 @@ void ESPNetworkSerialTCP::end() {
   if (_client) {
     _client.stop();
   }
+  resetProtocolState();
 
   if (_started) {
     _server.stop();
     _started = false;
+  }
+}
+
+void ESPNetworkSerialTCP::resetProtocolState() {
+  _protocolReady = false;
+  _handshakeStartedAt = 0;
+  _handshakeLength = 0;
+  _handshakeBuffer[0] = '\0';
+}
+
+void ESPNetworkSerialTCP::handleHandshake() {
+  if (!_client || !_client.connected() || _protocolReady) {
+    return;
+  }
+
+  while (_client.available() > 0) {
+    const int value = _client.read();
+    if (value < 0) {
+      break;
+    }
+
+    if (value == '\r') {
+      continue;
+    }
+
+    if (value == '\n') {
+      _handshakeBuffer[_handshakeLength] = '\0';
+
+      if (strcmp(_handshakeBuffer, "ESPNS/1 HELLO") == 0) {
+        _client.print("ESPNS/1 OK auth=none mode=raw\n");
+        _protocolReady = true;
+      } else {
+        _client.stop();
+        resetProtocolState();
+      }
+
+      return;
+    }
+
+    if (_handshakeLength + 1 >= sizeof(_handshakeBuffer)) {
+      _client.stop();
+      resetProtocolState();
+      return;
+    }
+
+    _handshakeBuffer[_handshakeLength++] = static_cast<char>(value);
+  }
+
+  if (_handshakeStartedAt != 0 &&
+      static_cast<uint32_t>(millis() - _handshakeStartedAt) >=
+          ESPNETWORKSERIAL_HANDSHAKE_TIMEOUT_MS) {
+    _client.stop();
+    resetProtocolState();
   }
 }
 
@@ -177,6 +238,11 @@ void ESPNetworkSerialTCP::handle() {
 
   if (_client && !_client.connected()) {
     _client.stop();
+    resetProtocolState();
+  }
+
+  if (_client && _client.connected() && !_protocolReady) {
+    handleHandshake();
   }
 
 #if defined(ESP_ARDUINO_VERSION_MAJOR) && ESP_ARDUINO_VERSION_MAJOR >= 3
@@ -196,6 +262,9 @@ void ESPNetworkSerialTCP::handle() {
 
   _client = candidate;
   _client.setNoDelay(true);
+  resetProtocolState();
+  _handshakeStartedAt = millis();
+  handleHandshake();
 }
 
 bool ESPNetworkSerialTCP::waitForConnection() {
@@ -238,7 +307,7 @@ bool ESPNetworkSerialTCP::started() const {
 
 bool ESPNetworkSerialTCP::connected() {
   handle();
-  return _client && _client.connected();
+  return _client && _client.connected() && _protocolReady;
 }
 
 uint16_t ESPNetworkSerialTCP::port() const {
@@ -256,7 +325,7 @@ IPAddress ESPNetworkSerialTCP::remoteIP() {
 size_t ESPNetworkSerialTCP::write(uint8_t byte) {
   handle();
 
-  if (!_client || !_client.connected()) {
+  if (!_client || !_client.connected() || !_protocolReady) {
     return 0;
   }
 
@@ -276,7 +345,7 @@ size_t ESPNetworkSerialTCP::write(const uint8_t *buffer, size_t size) {
 int ESPNetworkSerialTCP::available() {
   handle();
 
-  if (!_client || !_client.connected()) {
+  if (!_client || !_client.connected() || !_protocolReady) {
     return 0;
   }
 
@@ -286,7 +355,7 @@ int ESPNetworkSerialTCP::available() {
 int ESPNetworkSerialTCP::read() {
   handle();
 
-  if (!_client || !_client.connected()) {
+  if (!_client || !_client.connected() || !_protocolReady) {
     return -1;
   }
 
@@ -296,7 +365,7 @@ int ESPNetworkSerialTCP::read() {
 int ESPNetworkSerialTCP::peek() {
   handle();
 
-  if (!_client || !_client.connected()) {
+  if (!_client || !_client.connected() || !_protocolReady) {
     return -1;
   }
 
@@ -304,7 +373,7 @@ int ESPNetworkSerialTCP::peek() {
 }
 
 void ESPNetworkSerialTCP::flush() {
-  if (_client && _client.connected()) {
+  if (_client && _client.connected() && _protocolReady) {
     _client.flush();
   }
 }
