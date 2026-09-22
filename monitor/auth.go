@@ -61,11 +61,11 @@ func loadAuthSettings() (authSettings, error) {
 		}
 	}
 
-	if envKey, ok := os.LookupEnv("ESPNS_AUTH_KEY"); ok {
+	if envKey, ok := os.LookupEnv("ESPNS_AUTH_KEY"); ok && strings.TrimSpace(envKey) != "" {
 		settings.key = []byte(envKey)
 		settings.source = "ESPNS_AUTH_KEY environment variable"
 	}
-	if envAllow, ok := os.LookupEnv("ESPNS_ALLOW_UNAUTHENTICATED"); ok {
+	if envAllow, ok := os.LookupEnv("ESPNS_ALLOW_UNAUTHENTICATED"); ok && strings.TrimSpace(envAllow) != "" {
 		value, err := strconv.ParseBool(envAllow)
 		if err != nil {
 			return settings, fmt.Errorf("parse ESPNS_ALLOW_UNAUTHENTICATED: %w", err)
