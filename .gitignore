@@ -1,0 +1,32 @@
+# Build output
+build/
+dist/
+bin/
+out/
+*.elf
+*.bin
+*.map
+*.hex
+*.exe
+*.test
+*.out
+
+# Arduino / PlatformIO
+.pio/
+*.ino.cpp
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Logs / temporary files
+*.log
+*.tmp
+*.temp
