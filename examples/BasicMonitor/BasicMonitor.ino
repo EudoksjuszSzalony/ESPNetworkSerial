@@ -1,8 +1,10 @@
 #include <WiFi.h>
+#include <ArduinoOTA.h>
 #include <ESPNetworkSerial.h>
 
 const char *WIFI_SSID = "YOUR_SSID";
 const char *WIFI_PASSWORD = "YOUR_PASSWORD";
+const char *OTA_HOSTNAME = "espnetworkserial-test";
 
 ESPNetworkSerialTCP NetworkSerial;
 
@@ -20,6 +22,9 @@ void setup() {
   }
   Serial.println();
 
+  ArduinoOTA.setHostname(OTA_HOSTNAME);
+  ArduinoOTA.begin();
+
   NetworkSerial.begin();
 
   // One API, two bidirectional streams.
@@ -30,6 +35,8 @@ void setup() {
   ESPSerial.println("ESPNetworkSerial BasicMonitor");
   ESPSerial.print("IP: ");
   ESPSerial.println(WiFi.localIP());
+  ESPSerial.print("OTA hostname: ");
+  ESPSerial.println(OTA_HOSTNAME);
   ESPSerial.print("TCP port: ");
   ESPSerial.println(NetworkSerial.port());
   ESPSerial.println(
@@ -38,7 +45,7 @@ void setup() {
 }
 
 void loop() {
-  // Keep accepting/disconnecting TCP clients even while the sketch is quiet.
+  ArduinoOTA.handle();
   NetworkSerial.handle();
 
   static uint32_t lastStatus = 0;
@@ -48,7 +55,7 @@ void loop() {
     ESPSerial.println(millis());
   }
 
-  // Demonstrate that input can arrive from USB Serial or TCP.
+  // Input may arrive from USB Serial or from Arduino IDE over Wi-Fi.
   if (ESPSerial.available() > 0) {
     ESPSerial.print("RX: ");
 
