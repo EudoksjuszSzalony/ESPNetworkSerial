@@ -4,13 +4,13 @@
 
 ESPNetworkSerial aims to make network serial feel like ordinary Arduino Serial: select your ESP32 network port, open Serial Monitor, and communicate bidirectionally over Wi-Fi — while keeping OTA available on the same device.
 
-> **Status:** early development / pre-alpha. The public API and wire protocol are still being designed.
+> **Status:** early development / pre-alpha. The initial firmware multiplexer and raw TCP transport prototype are now in-tree. The Arduino IDE host monitor and the final wire protocol are still being built.
 
 ## Why
 
 The project is built around one UX rule: **the sketch should not need duplicate log statements for USB and Wi-Fi.**
 
-The target firmware API is a `Print`/`Stream`-compatible multiplexer so one call can fan out to multiple sinks:
+The firmware API now includes a `Print`/`Stream`-compatible multiplexer, so one call can fan out to multiple bidirectional streams:
 
 ~~~cpp
 ESPSerial.println("Boot complete");
@@ -29,6 +29,45 @@ Conceptually:
                                v
                       Arduino Serial Monitor
 ~~~
+
+## Current firmware prototype
+
+The first implementation can already combine USB Serial with a TCP stream:
+
+~~~cpp
+#include <WiFi.h>
+#include <ESPNetworkSerial.h>
+
+ESPNetworkSerialTCP NetworkSerial;
+
+void setup() {
+    Serial.begin(115200);
+
+    // Connect Wi-Fi first...
+
+    NetworkSerial.begin();
+
+    ESPSerial.addStream(Serial);
+    ESPSerial.addStream(NetworkSerial);
+
+    ESPSerial.println("Hello over USB and Wi-Fi!");
+}
+
+void loop() {
+    NetworkSerial.handle();
+
+    if (ESPSerial.available()) {
+        int c = ESPSerial.read();
+        // Input may come from USB Serial or the TCP client.
+    }
+}
+~~~
+
+`ESPSerial` broadcasts writes to all attached streams and reads from them using round-robin selection so one busy input does not permanently starve another.
+
+The current TCP transport is deliberately only a **pre-alpha transport prototype**. It is plaintext and unauthenticated, so use it only on a trusted LAN. It is not yet the final Arduino IDE integration.
+
+See [BasicMonitor](examples/BasicMonitor/BasicMonitor.ino) for the full example.
 
 ## Project goals
 
@@ -85,14 +124,16 @@ User-oriented installation and Getting Started guides will be added as the first
 
 ## v0.1 milestone
 
-- ESP32 firmware library
-- Native Arduino IDE Serial Monitor integration
-- Network port selected from Arduino IDE
-- Bidirectional RX + TX
-- Arduino OTA working simultaneously
-- Windows host binary / installer
-- Basic example sketch
-- Documented protocol and extension points
+- [x] Initial ESP32 `Stream` multiplexer
+- [x] Initial bidirectional TCP transport prototype
+- [x] Basic firmware example
+- [ ] Native Arduino IDE Serial Monitor integration
+- [ ] Network port selected from Arduino IDE
+- [ ] Arduino OTA working simultaneously with the monitor
+- [ ] Authentication / finalized protocol handshake
+- [ ] Windows host binary / installer
+- [ ] CI compile checks and release builds
+- [ ] Protocol and extension-point stabilization
 
 ## License
 
