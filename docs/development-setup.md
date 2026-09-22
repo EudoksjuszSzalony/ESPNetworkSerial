@@ -40,6 +40,24 @@ It refuses to overwrite a different existing `pluggable_monitor.pattern.network`
 
 Restart Arduino IDE after installation.
 
+### Optional: remove Arduino IDE's unnecessary OTA password prompt
+
+For sketches that intentionally use ArduinoOTA **without a password**, development mode can install a second upload recipe that does not declare an upload password field:
+
+~~~powershell
+.\installer\windows\install-dev.ps1 -PromptlessOTA
+~~~
+
+After restarting Arduino IDE, network upload should start directly instead of showing the `Configure and Upload -> Password` dialog.
+
+This is deliberately opt-in because Arduino chooses an upload tool by port protocol, not per-device `auth_upload` capability. While `-PromptlessOTA` is enabled, password-protected ArduinoOTA uploads in that ESP32 core will not work.
+
+To restore the normal password-capable ESP32 OTA recipe while keeping ESPNetworkSerialMonitor installed, rerun:
+
+~~~powershell
+.\installer\windows\install-dev.ps1
+~~~
+
 ## 3. Create local Wi-Fi credentials once
 
 In:
@@ -161,4 +179,5 @@ The script removes only the block managed by ESPNetworkSerial.
 - One network monitor client at a time.
 - Reconnect currently retries the same discovered IP address; DHCP address changes during the reconnect window are not followed yet.
 - The `network` -> monitor binding is installed per ESP32 core version; rerun the installer after a core update.
+- `-PromptlessOTA` is intentionally a development-only override and applies to ESP32 network uploads for the installed core version, not only to one sketch.
 - This development workflow is not the intended final end-user installer.

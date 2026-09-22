@@ -1,7 +1,46 @@
 $ErrorActionPreference = "Stop"
 
-$beginMarker = "# ESPNetworkSerial BEGIN"
-$endMarker = "# ESPNetworkSerial END"
+$platformBeginMarker = "# ESPNetworkSerial BEGIN"
+$platformEndMarker = "# ESPNetworkSerial END"
+$boardsBeginMarker = "# ESPNetworkSerial PROMPTLESS OTA BEGIN"
+$boardsEndMarker = "# ESPNetworkSerial PROMPTLESS OTA END"
+
+function Remove-ManagedBlock {
+    param(
+        [string]$Content,
+        [string]$BeginMarker,
+        [string]$EndMarker
+    )
+
+    $escapedBegin = [regex]::Escape($BeginMarker)
+    $escapedEnd = [regex]::Escape($EndMarker)
+    $pattern = "(?ms)^$escapedBegin\r?\n.*?^$escapedEnd\r?\n?"
+    return [regex]::Replace($Content, $pattern, "").Trim()
+}
+
+function Remove-ManagedFileBlock {
+    param(
+        [string]$Path,
+        [string]$BeginMarker,
+        [string]$EndMarker,
+        [System.Text.Encoding]$Encoding
+    )
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        return
+    }
+
+    $content = [System.IO.File]::ReadAllText($Path)
+    $newContent = Remove-ManagedBlock -Content $content -BeginMarker $BeginMarker -EndMarker $EndMarker
+
+    if ($newContent.Length -eq 0) {
+        Remove-Item -LiteralPath $Path
+        Write-Host "Removed empty file: $Path"
+    } else {
+        [System.IO.File]::WriteAllText($Path, $newContent + [Environment]::NewLine, $Encoding)
+        Write-Host "Removed ESPNetworkSerial block from: $Path"
+    }
+}
 
 if (-not $env:LOCALAPPDATA) {
     throw "LOCALAPPDATA is not set."
@@ -13,27 +52,20 @@ if (-not (Test-Path -LiteralPath $coreRoot -PathType Container)) {
 }
 
 $versions = @(Get-ChildItem -LiteralPath $coreRoot -Directory | Sort-Object Name)
-$escapedBegin = [regex]::Escape($beginMarker)
-$escapedEnd = [regex]::Escape($endMarker)
-$managedPattern = "(?ms)^$escapedBegin\r?\n.*?^$escapedEnd\r?\n?"
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 
 foreach ($version in $versions) {
-    $localPath = Join-Path $version.FullName "platform.local.txt"
-    if (-not (Test-Path -LiteralPath $localPath -PathType Leaf)) {
-        continue
-    }
+    Remove-ManagedFileBlock `
+        -Path (Join-Path $version.FullName "platform.local.txt") `
+        -BeginMarker $platformBeginMarker `
+        -EndMarker $platformEndMarker `
+        -Encoding $utf8NoBom
 
-    $content = [System.IO.File]::ReadAllText($localPath)
-    $newContent = [regex]::Replace($content, $managedPattern, "").Trim()
-
-    if ($newContent.Length -eq 0) {
-        Remove-Item -LiteralPath $localPath
-        Write-Host "Removed empty file: $localPath"
-    } else {
-        [System.IO.File]::WriteAllText($localPath, $newContent + [Environment]::NewLine, $utf8NoBom)
-        Write-Host "Removed ESPNetworkSerial block from: $localPath"
-    }
+    Remove-ManagedFileBlock `
+        -Path (Join-Path $version.FullName "boards.local.txt") `
+        -BeginMarker $boardsBeginMarker `
+        -EndMarker $boardsEndMarker `
+        -Encoding $utf8NoBom
 }
 
 Write-Host ""

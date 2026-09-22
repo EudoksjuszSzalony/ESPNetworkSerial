@@ -1,11 +1,48 @@
 param(
-    [string]$MonitorPath = (Join-Path $PSScriptRoot "..\..\monitor\espnetworkserial-monitor.exe")
+    [string]$MonitorPath = (Join-Path $PSScriptRoot "..\..\monitor\espnetworkserial-monitor.exe"),
+    [switch]$PromptlessOTA
 )
 
 $ErrorActionPreference = "Stop"
 
-$beginMarker = "# ESPNetworkSerial BEGIN"
-$endMarker = "# ESPNetworkSerial END"
+$platformBeginMarker = "# ESPNetworkSerial BEGIN"
+$platformEndMarker = "# ESPNetworkSerial END"
+$boardsBeginMarker = "# ESPNetworkSerial PROMPTLESS OTA BEGIN"
+$boardsEndMarker = "# ESPNetworkSerial PROMPTLESS OTA END"
+
+function Remove-ManagedBlock {
+    param(
+        [string]$Content,
+        [string]$BeginMarker,
+        [string]$EndMarker
+    )
+
+    $escapedBegin = [regex]::Escape($BeginMarker)
+    $escapedEnd = [regex]::Escape($EndMarker)
+    $pattern = "(?ms)^$escapedBegin\r?\n.*?^$escapedEnd\r?\n?"
+    return [regex]::Replace($Content, $pattern, "").TrimEnd()
+}
+
+function Write-OptionalFile {
+    param(
+        [string]$Path,
+        [string]$Content,
+        [System.Text.Encoding]$Encoding
+    )
+
+    if ($Content.Trim().Length -eq 0) {
+        if (Test-Path -LiteralPath $Path -PathType Leaf) {
+            Remove-Item -LiteralPath $Path
+        }
+        return
+    }
+
+    [System.IO.File]::WriteAllText(
+        $Path,
+        $Content.TrimEnd() + [Environment]::NewLine,
+        $Encoding
+    )
+}
 
 $MonitorPath = [System.IO.Path]::GetFullPath($MonitorPath)
 if (-not (Test-Path -LiteralPath $MonitorPath -PathType Leaf)) {
@@ -27,40 +64,113 @@ if ($versions.Count -eq 0) {
 }
 
 $recipePath = $MonitorPath.Replace('\', '/')
-$block = @"
-$beginMarker
-pluggable_monitor.pattern.network="$recipePath"
-$endMarker
-"@
+$utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 
 foreach ($version in $versions) {
-    $localPath = Join-Path $version.FullName "platform.local.txt"
-    $content = ""
-    if (Test-Path -LiteralPath $localPath -PathType Leaf) {
-        $content = [System.IO.File]::ReadAllText($localPath)
+    $platformLocalPath = Join-Path $version.FullName "platform.local.txt"
+    $platformContent = ""
+    if (Test-Path -LiteralPath $platformLocalPath -PathType Leaf) {
+        $platformContent = [System.IO.File]::ReadAllText($platformLocalPath)
     }
 
-    $escapedBegin = [regex]::Escape($beginMarker)
-    $escapedEnd = [regex]::Escape($endMarker)
-    $managedPattern = "(?ms)^$escapedBegin\r?\n.*?^$escapedEnd\r?\n?"
-    $contentWithoutManagedBlock = [regex]::Replace($content, $managedPattern, "").TrimEnd()
+    $platformContent = Remove-ManagedBlock `
+        -Content $platformContent `
+        -BeginMarker $platformBeginMarker `
+        -EndMarker $platformEndMarker
 
-    if ($contentWithoutManagedBlock -match '(?m)^\s*pluggable_monitor\.pattern\.network\s*=') {
-        throw "A different network pluggable monitor is already configured in $localPath. Remove or reconcile it manually before installing ESPNetworkSerialMonitor."
+    if ($platformContent -match '(?m)^\s*pluggable_monitor\.pattern\.network\s*=') {
+        throw "A different network pluggable monitor is already configured in $platformLocalPath. Remove or reconcile it manually before installing ESPNetworkSerialMonitor."
     }
 
-    if ($contentWithoutManagedBlock.Length -gt 0) {
-        $newContent = $contentWithoutManagedBlock + [Environment]::NewLine + [Environment]::NewLine + $block.Trim() + [Environment]::NewLine
+    $platformLines = @(
+        $platformBeginMarker,
+        "pluggable_monitor.pattern.network=`"$recipePath`""
+    )
+
+    if ($PromptlessOTA) {
+        $platformLines += @(
+            "",
+            "# Development-only no-password OTA recipe.",
+            "# This intentionally declares no upload.field.password, so Arduino IDE does not show the password dialog.",
+            "tools.espns_ota.cmd=python3 `"{runtime.platform.path}/tools/espota.py`" -r",
+            "tools.espns_ota.cmd.windows=`"{runtime.platform.path}\tools\espota.exe`" -r",
+            "tools.espns_ota.upload.protocol=network",
+            "tools.espns_ota.upload.params.verbose=",
+            "tools.espns_ota.upload.params.quiet=",
+            "tools.espns_ota.upload.pattern={cmd} -i {upload.port.address} -p {upload.port.properties.port} -f `"{build.path}/{build.project_name}.bin`""
+        )
+    }
+
+    $platformLines += $platformEndMarker
+    $platformBlock = $platformLines -join [Environment]::NewLine
+
+    if ($platformContent.Length -gt 0) {
+        $newPlatformContent = $platformContent + [Environment]::NewLine + [Environment]::NewLine + $platformBlock
     } else {
-        $newContent = $block.Trim() + [Environment]::NewLine
+        $newPlatformContent = $platformBlock
     }
 
-    $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
-    [System.IO.File]::WriteAllText($localPath, $newContent, $utf8NoBom)
-    Write-Host "Configured ESP32 core $($version.Name): $localPath"
+    Write-OptionalFile -Path $platformLocalPath -Content $newPlatformContent -Encoding $utf8NoBom
+    Write-Host "Configured ESP32 core $($version.Name): $platformLocalPath"
+
+    $boardsLocalPath = Join-Path $version.FullName "boards.local.txt"
+    $boardsContent = ""
+    if (Test-Path -LiteralPath $boardsLocalPath -PathType Leaf) {
+        $boardsContent = [System.IO.File]::ReadAllText($boardsLocalPath)
+    }
+
+    $boardsContent = Remove-ManagedBlock `
+        -Content $boardsContent `
+        -BeginMarker $boardsBeginMarker `
+        -EndMarker $boardsEndMarker
+
+    if ($PromptlessOTA) {
+        if ($boardsContent -match '(?m)^\s*[^#\s][^=]*\.upload\.tool\.network\s*=') {
+            throw "A custom network upload-tool override already exists in $boardsLocalPath. Remove or reconcile it manually before enabling -PromptlessOTA."
+        }
+
+        $boardsPath = Join-Path $version.FullName "boards.txt"
+        if (-not (Test-Path -LiteralPath $boardsPath -PathType Leaf)) {
+            throw "boards.txt not found: $boardsPath"
+        }
+
+        $boardIds = New-Object System.Collections.Generic.HashSet[string]
+        foreach ($line in [System.IO.File]::ReadLines($boardsPath)) {
+            if ($line -match '^([^.\s=]+)\.name=') {
+                [void]$boardIds.Add($matches[1])
+            }
+        }
+
+        if ($boardIds.Count -eq 0) {
+            throw "Could not discover board IDs from: $boardsPath"
+        }
+
+        $overrideLines = @($boardsBeginMarker)
+        foreach ($boardId in @($boardIds) | Sort-Object) {
+            $overrideLines += "$boardId.upload.tool.network=espns_ota"
+        }
+        $overrideLines += $boardsEndMarker
+        $overrideBlock = $overrideLines -join [Environment]::NewLine
+
+        if ($boardsContent.Length -gt 0) {
+            $boardsContent = $boardsContent + [Environment]::NewLine + [Environment]::NewLine + $overrideBlock
+        } else {
+            $boardsContent = $overrideBlock
+        }
+
+        Write-OptionalFile -Path $boardsLocalPath -Content $boardsContent -Encoding $utf8NoBom
+        Write-Host "Enabled promptless no-password OTA for ESP32 core $($version.Name): $boardsLocalPath"
+    } else {
+        Write-OptionalFile -Path $boardsLocalPath -Content $boardsContent -Encoding $utf8NoBom
+    }
 }
 
 Write-Host ""
 Write-Host "ESPNetworkSerialMonitor development integration installed."
-Write-Host "Restart Arduino IDE before testing the network Serial Monitor."
+if ($PromptlessOTA) {
+    Write-Warning "Promptless OTA is enabled for network uploads in the installed ESP32 core versions."
+    Write-Warning "Password-protected ArduinoOTA uploads will not work while this development override is enabled."
+    Write-Host "Run this installer again without -PromptlessOTA to restore the core's normal password-capable OTA recipe."
+}
+Write-Host "Restart Arduino IDE before testing."
 Write-Host "If the ESP32 core is updated later, run this installer again for the new core version."
