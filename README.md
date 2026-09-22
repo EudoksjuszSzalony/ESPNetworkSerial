@@ -177,7 +177,7 @@ GitHub Wiki can provide the friendly how-to layer, while `docs/` remains the ver
 - [ ] Signed/tagged release builds
 - [ ] Protocol and extension-point stabilization
 
-Development testing has been confirmed with Arduino IDE 2.3.10 and ESP32 Arduino core 3.3.10.
+Development testing has been confirmed with Arduino IDE 2.3.10 and ESP32 Arduino core 3.3.10, including OTA upload with an open Wi-Fi Serial Monitor and automatic monitor reconnection after the ESP32 reboots.
 
 ## License
 
