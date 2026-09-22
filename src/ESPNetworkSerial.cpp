@@ -1,5 +1,7 @@
 #include "ESPNetworkSerial.h"
 
+#include <cstring>
+
 #if __has_include(<esp_arduino_version.h>)
 #include <esp_arduino_version.h>
 #endif
@@ -335,7 +337,7 @@ size_t ESPNetworkSerialTCP::write(uint8_t byte) {
 size_t ESPNetworkSerialTCP::write(const uint8_t *buffer, size_t size) {
   handle();
 
-  if (!_client || !_client.connected() || buffer == nullptr || size == 0) {
+  if (!_client || !_client.connected() || !_protocolReady || buffer == nullptr || size == 0) {
     return 0;
   }
 
