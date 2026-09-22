@@ -109,6 +109,7 @@ void setup() {
 
   ArduinoOTA.begin();
 
+// ESPNS authentication is independent from ArduinoOTA authentication.
 #ifdef ESPNS_AUTH_KEY
   if (!NetworkSerial.setAuthKey(ESPNS_AUTH_KEY)) {
     Serial.println("FATAL: ESPNS_AUTH_KEY must be 16..128 bytes.");
