@@ -196,7 +196,14 @@ library.properties   Arduino library metadata
 
 The Arduino library metadata and `src/` directory live at the repository root so the project can later be distributed through Arduino Library Manager. Compiled host binaries will be published as release assets, not committed to the source tree.
 
+## Arduino Library Manager status
+
+The development checkout can already appear under **File -> Examples** and **Sketch -> Include Library** because Arduino scans locally installed libraries. It is not expected to appear in the sidebar **Library Manager** catalog yet: that catalog is populated from Arduino's Library Manager registry/index.
+
+ESPNetworkSerial will be submitted to the Arduino Library Manager registry after the first tagged public release and library metadata/API are stable enough to publish.
+
 ## Documentation
+
 
 - [Architecture](docs/architecture.md)
 - [Protocol specification](docs/protocol.md)
@@ -222,6 +229,7 @@ GitHub Wiki can provide the friendly how-to layer, while `docs/` remains the ver
 - [x] Optional mutual HMAC-SHA256 authentication handshake
 - [x] Encrypted / integrity-protected AES-256-GCM serial transport
 - [ ] Windows end-user installer
+- [ ] First tagged public release + Arduino Library Manager registration
 - [x] Host monitor Go tests + cross-platform CI build workflow
 - [ ] Signed/tagged release builds
 - [ ] Protocol and extension-point stabilization
