@@ -1102,6 +1102,11 @@ size_t ESPNetworkSerialTCP::write(const uint8_t *buffer, size_t size) {
 }
 
 int ESPNetworkSerialTCP::available() {
+  if (_secureMode && _protocolReady && _client && _client.connected() &&
+      _rxPlainOffset < _rxPlainLength) {
+    return static_cast<int>(_rxPlainLength - _rxPlainOffset);
+  }
+
   handle();
 
   if (!_client || !_client.connected() || !_protocolReady) {
@@ -1117,7 +1122,10 @@ int ESPNetworkSerialTCP::available() {
 }
 
 int ESPNetworkSerialTCP::read() {
-  handle();
+  if (!(_secureMode && _protocolReady && _client && _client.connected() &&
+        _rxPlainOffset < _rxPlainLength)) {
+    handle();
+  }
 
   if (!_client || !_client.connected() || !_protocolReady) {
     return -1;
@@ -1127,7 +1135,9 @@ int ESPNetworkSerialTCP::read() {
     return _client.read();
   }
 
-  handleSecureRx();
+  if (_rxPlainOffset >= _rxPlainLength) {
+    handleSecureRx();
+  }
   if (_rxPlainOffset >= _rxPlainLength) {
     return -1;
   }
@@ -1141,7 +1151,10 @@ int ESPNetworkSerialTCP::read() {
 }
 
 int ESPNetworkSerialTCP::peek() {
-  handle();
+  if (!(_secureMode && _protocolReady && _client && _client.connected() &&
+        _rxPlainOffset < _rxPlainLength)) {
+    handle();
+  }
 
   if (!_client || !_client.connected() || !_protocolReady) {
     return -1;
@@ -1151,7 +1164,9 @@ int ESPNetworkSerialTCP::peek() {
     return _client.peek();
   }
 
-  handleSecureRx();
+  if (_rxPlainOffset >= _rxPlainLength) {
+    handleSecureRx();
+  }
   if (_rxPlainOffset >= _rxPlainLength) {
     return -1;
   }
