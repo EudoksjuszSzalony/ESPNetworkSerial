@@ -22,6 +22,10 @@ jobs:
         working-directory: monitor
         run: go test ./...
 
+      - name: Race detector
+        working-directory: monitor
+        run: go test -race ./...
+
   build:
     runs-on: ubuntu-latest
     strategy:
