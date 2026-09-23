@@ -5,6 +5,7 @@
 
 #include <esp_random.h>
 #include <mbedtls/md.h>
+#include <mbedtls/gcm.h>
 
 #if __has_include(<esp_arduino_version.h>)
 #include <esp_arduino_version.h>
@@ -275,9 +276,28 @@ ESPNetworkSerialTCP::ESPNetworkSerialTCP(uint16_t port)
       _authKey{},
       _authKeyLength(0),
       _clientNonceHex{},
-      _serverNonceHex{} {}
+      _serverNonceHex{},
+      _secureMode(false),
+      _txKey{},
+      _rxKey{},
+      _txNoncePrefix{},
+      _rxNoncePrefix{},
+      _txSequence(0),
+      _rxSequence(0),
+      _rxRecordHeader{},
+      _rxRecordHeaderLength(0),
+      _rxCipherLength(0),
+      _rxCipher{},
+      _rxCipherReceived(0),
+      _rxTag{},
+      _rxTagReceived(0),
+      _rxPlain{},
+      _rxPlainLength(0),
+      _rxPlainOffset(0) {}
 
 namespace {
+
+constexpr char kESPNSecureMode[] = "aes256-gcm";
 
 char hexDigit(uint8_t value) {
   value &= 0x0F;
@@ -368,6 +388,58 @@ bool getControlField(const char *line, const char *fieldName, char *output,
   return false;
 }
 
+bool hmacSha256(const uint8_t *key, size_t keyLength, const uint8_t *data,
+                size_t dataLength, uint8_t output[32]) {
+  const mbedtls_md_info_t *info =
+      mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
+  if (info == nullptr) {
+    return false;
+  }
+
+  return mbedtls_md_hmac(info, key, keyLength, data, dataLength, output) == 0;
+}
+
+bool hkdfExpandSingleBlock(const uint8_t prk[32], const char *infoText,
+                           uint8_t *output, size_t outputLength) {
+  if (infoText == nullptr || output == nullptr || outputLength == 0 ||
+      outputLength > 32) {
+    return false;
+  }
+
+  const size_t infoLength = std::strlen(infoText);
+  uint8_t input[96];
+  if (infoLength + 1 > sizeof(input)) {
+    return false;
+  }
+
+  std::memcpy(input, infoText, infoLength);
+  input[infoLength] = 0x01;
+
+  uint8_t digest[32];
+  if (!hmacSha256(prk, 32, input, infoLength + 1, digest)) {
+    return false;
+  }
+
+  std::memcpy(output, digest, outputLength);
+  std::memset(digest, 0, sizeof(digest));
+  return true;
+}
+
+uint64_t readUint64BE(const uint8_t *input) {
+  uint64_t value = 0;
+  for (size_t i = 0; i < 8; ++i) {
+    value = (value << 8) | input[i];
+  }
+  return value;
+}
+
+void writeUint64BE(uint8_t *output, uint64_t value) {
+  for (int i = 7; i >= 0; --i) {
+    output[i] = static_cast<uint8_t>(value & 0xFF);
+    value >>= 8;
+  }
+}
+
 }  // namespace
 
 void ESPNetworkSerialTCP::begin() {
@@ -428,6 +500,26 @@ void ESPNetworkSerialTCP::resetHandshakeLine() {
   _handshakeBuffer[0] = '\0';
 }
 
+void ESPNetworkSerialTCP::resetRxRecordAssembly() {
+  _rxRecordHeaderLength = 0;
+  _rxCipherLength = 0;
+  _rxCipherReceived = 0;
+  _rxTagReceived = 0;
+}
+
+void ESPNetworkSerialTCP::resetSecureState() {
+  _secureMode = false;
+  std::memset(_txKey, 0, sizeof(_txKey));
+  std::memset(_rxKey, 0, sizeof(_rxKey));
+  std::memset(_txNoncePrefix, 0, sizeof(_txNoncePrefix));
+  std::memset(_rxNoncePrefix, 0, sizeof(_rxNoncePrefix));
+  _txSequence = 0;
+  _rxSequence = 0;
+  resetRxRecordAssembly();
+  _rxPlainLength = 0;
+  _rxPlainOffset = 0;
+}
+
 void ESPNetworkSerialTCP::resetProtocolState() {
   _protocolReady = false;
   _handshakeState = HandshakeState::WaitingHello;
@@ -435,6 +527,7 @@ void ESPNetworkSerialTCP::resetProtocolState() {
   resetHandshakeLine();
   std::memset(_clientNonceHex, 0, sizeof(_clientNonceHex));
   std::memset(_serverNonceHex, 0, sizeof(_serverNonceHex));
+  resetSecureState();
 }
 
 void ESPNetworkSerialTCP::closeProtocolClient() {
@@ -444,32 +537,74 @@ void ESPNetworkSerialTCP::closeProtocolClient() {
   resetProtocolState();
 }
 
-bool ESPNetworkSerialTCP::computeHmac(const char *role,
+bool ESPNetworkSerialTCP::computeHmac(const char *role, const char *mode,
                                       uint8_t output[32]) const {
-  if (!authenticationEnabled() || role == nullptr || output == nullptr) {
+  if (!authenticationEnabled() || role == nullptr || mode == nullptr ||
+      output == nullptr) {
     return false;
   }
 
-  char message[96];
+  char message[128];
   const int messageLength =
-      std::snprintf(message, sizeof(message), "ESPNS/1 %s %s %s", role,
-                    _clientNonceHex, _serverNonceHex);
+      std::snprintf(message, sizeof(message), "ESPNS/1 %s %s %s %s", role,
+                    _clientNonceHex, _serverNonceHex, mode);
   if (messageLength <= 0 ||
       static_cast<size_t>(messageLength) >= sizeof(message)) {
     return false;
   }
 
-  const mbedtls_md_info_t *info =
-      mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
-  if (info == nullptr) {
+  return hmacSha256(
+      reinterpret_cast<const uint8_t *>(_authKey), _authKeyLength,
+      reinterpret_cast<const uint8_t *>(message),
+      static_cast<size_t>(messageLength), output);
+}
+
+bool ESPNetworkSerialTCP::deriveSessionKeys() {
+  if (!authenticationEnabled()) {
     return false;
   }
 
-  return mbedtls_md_hmac(
-             info, reinterpret_cast<const unsigned char *>(_authKey),
-             _authKeyLength,
-             reinterpret_cast<const unsigned char *>(message),
-             static_cast<size_t>(messageLength), output) == 0;
+  uint8_t clientNonce[ESPNETWORKSERIAL_AUTH_NONCE_SIZE];
+  uint8_t serverNonce[ESPNETWORKSERIAL_AUTH_NONCE_SIZE];
+  if (!hexToBytes(_clientNonceHex, sizeof(clientNonce), clientNonce) ||
+      !hexToBytes(_serverNonceHex, sizeof(serverNonce), serverNonce)) {
+    return false;
+  }
+
+  uint8_t salt[ESPNETWORKSERIAL_AUTH_NONCE_SIZE * 2];
+  std::memcpy(salt, clientNonce, sizeof(clientNonce));
+  std::memcpy(salt + sizeof(clientNonce), serverNonce, sizeof(serverNonce));
+
+  uint8_t prk[32];
+  if (!hmacSha256(
+          salt, sizeof(salt),
+          reinterpret_cast<const uint8_t *>(_authKey), _authKeyLength, prk)) {
+    return false;
+  }
+
+  const bool ok =
+      hkdfExpandSingleBlock(prk, "ESPNS/1 aes256-gcm device-to-host key",
+                            _txKey, sizeof(_txKey)) &&
+      hkdfExpandSingleBlock(prk, "ESPNS/1 aes256-gcm host-to-device key",
+                            _rxKey, sizeof(_rxKey)) &&
+      hkdfExpandSingleBlock(
+          prk, "ESPNS/1 aes256-gcm device-to-host nonce-prefix",
+          _txNoncePrefix, sizeof(_txNoncePrefix)) &&
+      hkdfExpandSingleBlock(
+          prk, "ESPNS/1 aes256-gcm host-to-device nonce-prefix",
+          _rxNoncePrefix, sizeof(_rxNoncePrefix));
+
+  std::memset(prk, 0, sizeof(prk));
+  std::memset(clientNonce, 0, sizeof(clientNonce));
+  std::memset(serverNonce, 0, sizeof(serverNonce));
+  std::memset(salt, 0, sizeof(salt));
+
+  _txSequence = 0;
+  _rxSequence = 0;
+  resetRxRecordAssembly();
+  _rxPlainLength = 0;
+  _rxPlainOffset = 0;
+  return ok;
 }
 
 void ESPNetworkSerialTCP::beginAuthChallenge(const char *clientNonceHex) {
@@ -496,7 +631,7 @@ void ESPNetworkSerialTCP::beginAuthChallenge(const char *clientNonceHex) {
   bytesToHex(serverNonce, sizeof(serverNonce), _serverNonceHex);
 
   uint8_t proof[32];
-  if (!computeHmac("SERVER", proof)) {
+  if (!computeHmac("SERVER", kESPNSecureMode, proof)) {
     _client.print("ESPNS/1 ERR auth_internal\n");
     closeProtocolClient();
     return;
@@ -509,7 +644,9 @@ void ESPNetworkSerialTCP::beginAuthChallenge(const char *clientNonceHex) {
   _client.print(_serverNonceHex);
   _client.print(" proof=");
   _client.print(proofHex);
-  _client.print(" mode=raw\n");
+  _client.print(" mode=");
+  _client.print(kESPNSecureMode);
+  _client.print("\n");
 
   _handshakeState = HandshakeState::WaitingAuth;
   _handshakeStartedAt = millis();
@@ -523,7 +660,7 @@ bool ESPNetworkSerialTCP::verifyClientProof(const char *proofHex) {
   }
 
   uint8_t expectedProof[32];
-  if (!computeHmac("CLIENT", expectedProof)) {
+  if (!computeHmac("CLIENT", kESPNSecureMode, expectedProof)) {
     return false;
   }
 
@@ -583,7 +720,17 @@ void ESPNetworkSerialTCP::processHandshakeLine() {
       return;
     }
 
-    _client.print("ESPNS/1 OK auth=hmac-sha256 mode=raw\n");
+    if (!deriveSessionKeys()) {
+      _client.print("ESPNS/1 ERR secure_internal\n");
+      closeProtocolClient();
+      return;
+    }
+
+    _client.print("ESPNS/1 OK auth=hmac-sha256 mode=");
+    _client.print(kESPNSecureMode);
+    _client.print("\n");
+
+    _secureMode = true;
     _protocolReady = true;
     _handshakeState = HandshakeState::Ready;
     return;
@@ -634,6 +781,198 @@ void ESPNetworkSerialTCP::handleHandshake() {
   }
 }
 
+void ESPNetworkSerialTCP::makeSecureNonce(
+    const uint8_t prefix[ESPNETWORKSERIAL_SECURE_NONCE_PREFIX_SIZE],
+    uint64_t sequence, uint8_t nonce[12]) const {
+  std::memcpy(nonce, prefix, ESPNETWORKSERIAL_SECURE_NONCE_PREFIX_SIZE);
+  writeUint64BE(nonce + ESPNETWORKSERIAL_SECURE_NONCE_PREFIX_SIZE, sequence);
+}
+
+bool ESPNetworkSerialTCP::writeClientAll(const uint8_t *buffer, size_t size) {
+  size_t offset = 0;
+  while (offset < size) {
+    const size_t written = _client.write(buffer + offset, size - offset);
+    if (written == 0) {
+      return false;
+    }
+    offset += written;
+  }
+  return true;
+}
+
+bool ESPNetworkSerialTCP::writeSecureRecord(const uint8_t *buffer, size_t size) {
+  if (!_secureMode || buffer == nullptr || size == 0 ||
+      size > ESPNETWORKSERIAL_SECURE_MAX_RECORD ||
+      _txSequence == UINT64_MAX) {
+    return false;
+  }
+
+  uint8_t header[ESPNETWORKSERIAL_SECURE_HEADER_SIZE];
+  header[0] = static_cast<uint8_t>((size >> 8) & 0xFF);
+  header[1] = static_cast<uint8_t>(size & 0xFF);
+  writeUint64BE(header + 2, _txSequence);
+
+  uint8_t nonce[12];
+  makeSecureNonce(_txNoncePrefix, _txSequence, nonce);
+
+  uint8_t ciphertext[ESPNETWORKSERIAL_SECURE_MAX_RECORD];
+  uint8_t tag[ESPNETWORKSERIAL_SECURE_TAG_SIZE];
+
+  mbedtls_gcm_context context;
+  mbedtls_gcm_init(&context);
+
+  int result = mbedtls_gcm_setkey(
+      &context, MBEDTLS_CIPHER_ID_AES, _txKey,
+      ESPNETWORKSERIAL_SECURE_KEY_SIZE * 8);
+  if (result == 0) {
+    result = mbedtls_gcm_crypt_and_tag(
+        &context, MBEDTLS_GCM_ENCRYPT, size, nonce, sizeof(nonce), header,
+        sizeof(header), buffer, ciphertext, sizeof(tag), tag);
+  }
+
+  mbedtls_gcm_free(&context);
+
+  if (result != 0 ||
+      !writeClientAll(header, sizeof(header)) ||
+      !writeClientAll(ciphertext, size) ||
+      !writeClientAll(tag, sizeof(tag))) {
+    return false;
+  }
+
+  ++_txSequence;
+  return true;
+}
+
+bool ESPNetworkSerialTCP::decryptSecureRecord() {
+  if (_rxCipherLength == 0 ||
+      _rxCipherLength > ESPNETWORKSERIAL_SECURE_MAX_RECORD ||
+      _rxCipherReceived != _rxCipherLength ||
+      _rxTagReceived != ESPNETWORKSERIAL_SECURE_TAG_SIZE) {
+    return false;
+  }
+
+  const uint64_t sequence = readUint64BE(_rxRecordHeader + 2);
+  if (sequence != _rxSequence || _rxSequence == UINT64_MAX) {
+    return false;
+  }
+
+  uint8_t nonce[12];
+  makeSecureNonce(_rxNoncePrefix, sequence, nonce);
+
+  mbedtls_gcm_context context;
+  mbedtls_gcm_init(&context);
+
+  int result = mbedtls_gcm_setkey(
+      &context, MBEDTLS_CIPHER_ID_AES, _rxKey,
+      ESPNETWORKSERIAL_SECURE_KEY_SIZE * 8);
+  if (result == 0) {
+    result = mbedtls_gcm_auth_decrypt(
+        &context, _rxCipherLength, nonce, sizeof(nonce), _rxRecordHeader,
+        sizeof(_rxRecordHeader), _rxTag, sizeof(_rxTag), _rxCipher, _rxPlain);
+  }
+
+  mbedtls_gcm_free(&context);
+
+  if (result != 0) {
+    return false;
+  }
+
+  _rxPlainLength = _rxCipherLength;
+  _rxPlainOffset = 0;
+  ++_rxSequence;
+  return true;
+}
+
+void ESPNetworkSerialTCP::handleSecureRx() {
+  if (!_secureMode || !_protocolReady || !_client || !_client.connected() ||
+      _rxPlainOffset < _rxPlainLength) {
+    return;
+  }
+
+  while (_client.available() > 0) {
+    if (_rxRecordHeaderLength < ESPNETWORKSERIAL_SECURE_HEADER_SIZE) {
+      const size_t remaining =
+          ESPNETWORKSERIAL_SECURE_HEADER_SIZE - _rxRecordHeaderLength;
+      const size_t availableBytes = static_cast<size_t>(_client.available());
+      const size_t request =
+          availableBytes < remaining ? availableBytes : remaining;
+
+      const int count =
+          _client.read(_rxRecordHeader + _rxRecordHeaderLength, request);
+      if (count <= 0) {
+        return;
+      }
+
+      _rxRecordHeaderLength += static_cast<size_t>(count);
+      if (_rxRecordHeaderLength < ESPNETWORKSERIAL_SECURE_HEADER_SIZE) {
+        return;
+      }
+
+      _rxCipherLength =
+          static_cast<uint16_t>((static_cast<uint16_t>(_rxRecordHeader[0]) << 8) |
+                                _rxRecordHeader[1]);
+
+      const uint64_t sequence = readUint64BE(_rxRecordHeader + 2);
+      if (_rxCipherLength == 0 ||
+          _rxCipherLength > ESPNETWORKSERIAL_SECURE_MAX_RECORD ||
+          sequence != _rxSequence) {
+        closeProtocolClient();
+        return;
+      }
+    }
+
+    if (_rxCipherReceived < _rxCipherLength && _client.available() > 0) {
+      const size_t remaining = _rxCipherLength - _rxCipherReceived;
+      const size_t availableBytes = static_cast<size_t>(_client.available());
+      const size_t request =
+          availableBytes < remaining ? availableBytes : remaining;
+
+      const int count = _client.read(_rxCipher + _rxCipherReceived, request);
+      if (count <= 0) {
+        return;
+      }
+      _rxCipherReceived += static_cast<size_t>(count);
+
+      if (_rxCipherReceived < _rxCipherLength) {
+        return;
+      }
+    }
+
+    if (_rxTagReceived < ESPNETWORKSERIAL_SECURE_TAG_SIZE &&
+        _client.available() > 0) {
+      const size_t remaining =
+          ESPNETWORKSERIAL_SECURE_TAG_SIZE - _rxTagReceived;
+      const size_t availableBytes = static_cast<size_t>(_client.available());
+      const size_t request =
+          availableBytes < remaining ? availableBytes : remaining;
+
+      const int count = _client.read(_rxTag + _rxTagReceived, request);
+      if (count <= 0) {
+        return;
+      }
+      _rxTagReceived += static_cast<size_t>(count);
+
+      if (_rxTagReceived < ESPNETWORKSERIAL_SECURE_TAG_SIZE) {
+        return;
+      }
+    }
+
+    if (_rxRecordHeaderLength == ESPNETWORKSERIAL_SECURE_HEADER_SIZE &&
+        _rxCipherReceived == _rxCipherLength &&
+        _rxTagReceived == ESPNETWORKSERIAL_SECURE_TAG_SIZE) {
+      if (!decryptSecureRecord()) {
+        closeProtocolClient();
+        return;
+      }
+
+      resetRxRecordAssembly();
+      return;
+    }
+
+    return;
+  }
+}
+
 void ESPNetworkSerialTCP::handle() {
   if (!_started) {
     return;
@@ -645,6 +984,10 @@ void ESPNetworkSerialTCP::handle() {
 
   if (_client && _client.connected() && !_protocolReady) {
     handleHandshake();
+  }
+
+  if (_client && _client.connected() && _protocolReady && _secureMode) {
+    handleSecureRx();
   }
 
 #if defined(ESP_ARDUINO_VERSION_MAJOR) && ESP_ARDUINO_VERSION_MAJOR >= 3
@@ -725,13 +1068,7 @@ IPAddress ESPNetworkSerialTCP::remoteIP() {
 }
 
 size_t ESPNetworkSerialTCP::write(uint8_t byte) {
-  handle();
-
-  if (!_client || !_client.connected() || !_protocolReady) {
-    return 0;
-  }
-
-  return _client.write(byte);
+  return write(&byte, 1);
 }
 
 size_t ESPNetworkSerialTCP::write(const uint8_t *buffer, size_t size) {
@@ -742,7 +1079,26 @@ size_t ESPNetworkSerialTCP::write(const uint8_t *buffer, size_t size) {
     return 0;
   }
 
-  return _client.write(buffer, size);
+  if (!_secureMode) {
+    return _client.write(buffer, size);
+  }
+
+  size_t total = 0;
+  while (total < size) {
+    size_t chunk = size - total;
+    if (chunk > ESPNETWORKSERIAL_SECURE_MAX_RECORD) {
+      chunk = ESPNETWORKSERIAL_SECURE_MAX_RECORD;
+    }
+
+    if (!writeSecureRecord(buffer + total, chunk)) {
+      closeProtocolClient();
+      break;
+    }
+
+    total += chunk;
+  }
+
+  return total;
 }
 
 int ESPNetworkSerialTCP::available() {
@@ -752,7 +1108,12 @@ int ESPNetworkSerialTCP::available() {
     return 0;
   }
 
-  return _client.available();
+  if (!_secureMode) {
+    return _client.available();
+  }
+
+  handleSecureRx();
+  return static_cast<int>(_rxPlainLength - _rxPlainOffset);
 }
 
 int ESPNetworkSerialTCP::read() {
@@ -762,7 +1123,21 @@ int ESPNetworkSerialTCP::read() {
     return -1;
   }
 
-  return _client.read();
+  if (!_secureMode) {
+    return _client.read();
+  }
+
+  handleSecureRx();
+  if (_rxPlainOffset >= _rxPlainLength) {
+    return -1;
+  }
+
+  const int value = _rxPlain[_rxPlainOffset++];
+  if (_rxPlainOffset >= _rxPlainLength) {
+    _rxPlainOffset = 0;
+    _rxPlainLength = 0;
+  }
+  return value;
 }
 
 int ESPNetworkSerialTCP::peek() {
@@ -772,7 +1147,16 @@ int ESPNetworkSerialTCP::peek() {
     return -1;
   }
 
-  return _client.peek();
+  if (!_secureMode) {
+    return _client.peek();
+  }
+
+  handleSecureRx();
+  if (_rxPlainOffset >= _rxPlainLength) {
+    return -1;
+  }
+
+  return _rxPlain[_rxPlainOffset];
 }
 
 void ESPNetworkSerialTCP::flush() {

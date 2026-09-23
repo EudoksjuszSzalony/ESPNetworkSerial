@@ -160,7 +160,7 @@ void setup() {
   ESPSerial.println(ESPSerial.authenticationEnabled() ? "hmac-sha256" : "none");
   if (ESPSerial.authenticationEnabled()) {
     ESPSerial.println(
-        "Transport: authenticated plaintext TCP; serial payload is not encrypted.");
+        "Transport: authenticated + AES-256-GCM encrypted ESPNS stream.");
   } else {
     ESPSerial.println(
         "Transport: unauthenticated plaintext TCP; use only on a trusted LAN.");

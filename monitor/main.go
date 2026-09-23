@@ -18,7 +18,7 @@ import (
 
 const (
 	monitorName       = "ESPNetworkSerialMonitor"
-	monitorVersion    = "0.3.0-dev"
+	monitorVersion    = "0.4.0-dev"
 	protocolVersion   = 1
 	defaultDevicePort = "3233"
 	dialTimeout       = 4 * time.Second

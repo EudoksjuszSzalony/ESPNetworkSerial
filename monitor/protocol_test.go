@@ -57,7 +57,7 @@ func TestESPNSHandshakeRejectsUnauthenticatedDowngrade(t *testing.T) {
 	}
 }
 
-func TestESPNSMutualHMACHandshake(t *testing.T) {
+func TestESPNSMutualHMACHandshakeNegotiatesSecureMode(t *testing.T) {
 	client, server := net.Pipe()
 	defer client.Close()
 	defer server.Close()
@@ -81,14 +81,14 @@ func TestESPNSMutualHMACHandshake(t *testing.T) {
 		}
 
 		serverNonce := "00112233445566778899aabbccddeeff"
-		serverProof := espnsHMAC(auth.key, "SERVER", clientNonce, serverNonce)
+		serverProof := espnsHMAC(auth.key, "SERVER", clientNonce, serverNonce, espnsSecureMode)
 
 		if _, err := io.WriteString(
 			server,
 			espnsChallengeLine+
 				" auth=hmac-sha256 nonce="+serverNonce+
 				" proof="+hex.EncodeToString(serverProof)+
-				" mode=raw\n",
+				" mode="+espnsSecureMode+"\n",
 		); err != nil {
 			done <- err
 			return
@@ -105,18 +105,25 @@ func TestESPNSMutualHMACHandshake(t *testing.T) {
 			done <- err
 			return
 		}
-		wantProof := espnsHMAC(auth.key, "CLIENT", clientNonce, serverNonce)
+		wantProof := espnsHMAC(auth.key, "CLIENT", clientNonce, serverNonce, espnsSecureMode)
 		if !hmac.Equal(gotProof, wantProof) {
 			done <- fmt.Errorf("client proof mismatch")
 			return
 		}
 
-		_, err = io.WriteString(server, espnsOKLine+" auth=hmac-sha256 mode=raw\n")
+		_, err = io.WriteString(server, espnsOKLine+" auth=hmac-sha256 mode="+espnsSecureMode+"\n")
 		done <- err
 	}()
 
-	if err := performESPNSHandshake(client, auth); err != nil {
+	negotiation, err := negotiateESPNSHandshake(client, auth)
+	if err != nil {
 		t.Fatalf("mutual HMAC handshake failed: %v", err)
+	}
+	if !negotiation.secure {
+		t.Fatal("expected secure negotiation")
+	}
+	if negotiation.keys.hostToDeviceKey == ([32]byte{}) || negotiation.keys.deviceToHostKey == ([32]byte{}) {
+		t.Fatal("expected derived session keys")
 	}
 	if err := <-done; err != nil {
 		t.Fatalf("server side failed: %v", err)
@@ -132,20 +139,45 @@ func TestESPNSHandshakeRejectsWrongServerProof(t *testing.T) {
 
 	go func() {
 		reader := bufio.NewReader(server)
-		hello, _ := reader.ReadString('\n')
-		clientNonce := parseESPNSFields(strings.TrimSpace(hello))["nonce"]
+		_, _ = reader.ReadString('\n')
 		_, _ = io.WriteString(
 			server,
 			espnsChallengeLine+
 				" auth=hmac-sha256 nonce=00112233445566778899aabbccddeeff"+
 				" proof="+strings.Repeat("00", 32)+
-				" mode=raw\n",
+				" mode="+espnsSecureMode+"\n",
 		)
-		_ = clientNonce
 	}()
 
 	if err := performESPNSHandshake(client, auth); err == nil {
 		t.Fatal("expected invalid server proof to fail")
+	}
+}
+
+func TestESPNSHandshakeRejectsAuthenticatedRawDowngrade(t *testing.T) {
+	client, server := net.Pipe()
+	defer client.Close()
+	defer server.Close()
+
+	auth := authSettings{key: []byte("0123456789abcdef0123456789abcdef")}
+
+	go func() {
+		reader := bufio.NewReader(server)
+		hello, _ := reader.ReadString('\n')
+		clientNonce := parseESPNSFields(strings.TrimSpace(hello))["nonce"]
+		serverNonce := "00112233445566778899aabbccddeeff"
+		serverProof := espnsHMAC(auth.key, "SERVER", clientNonce, serverNonce, "raw")
+		_, _ = io.WriteString(
+			server,
+			espnsChallengeLine+
+				" auth=hmac-sha256 nonce="+serverNonce+
+				" proof="+hex.EncodeToString(serverProof)+
+				" mode=raw\n",
+		)
+	}()
+
+	if err := performESPNSHandshake(client, auth); err == nil {
+		t.Fatal("expected authenticated raw mode downgrade to fail")
 	}
 }
 

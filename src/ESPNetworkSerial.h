@@ -35,6 +35,26 @@
 #define ESPNETWORKSERIAL_AUTH_NONCE_SIZE 16
 #endif
 
+#ifndef ESPNETWORKSERIAL_SECURE_MAX_RECORD
+#define ESPNETWORKSERIAL_SECURE_MAX_RECORD 1024
+#endif
+
+#ifndef ESPNETWORKSERIAL_SECURE_TAG_SIZE
+#define ESPNETWORKSERIAL_SECURE_TAG_SIZE 16
+#endif
+
+#ifndef ESPNETWORKSERIAL_SECURE_HEADER_SIZE
+#define ESPNETWORKSERIAL_SECURE_HEADER_SIZE 10
+#endif
+
+#ifndef ESPNETWORKSERIAL_SECURE_KEY_SIZE
+#define ESPNETWORKSERIAL_SECURE_KEY_SIZE 32
+#endif
+
+#ifndef ESPNETWORKSERIAL_SECURE_NONCE_PREFIX_SIZE
+#define ESPNETWORKSERIAL_SECURE_NONCE_PREFIX_SIZE 4
+#endif
+
 class ESPNetworkSerialMux : public Stream {
 public:
   ESPNetworkSerialMux();
@@ -108,7 +128,17 @@ private:
   void closeProtocolClient();
   void beginAuthChallenge(const char *clientNonceHex);
   bool verifyClientProof(const char *proofHex);
-  bool computeHmac(const char *role, uint8_t output[32]) const;
+  bool computeHmac(const char *role, const char *mode, uint8_t output[32]) const;
+  bool deriveSessionKeys();
+
+  void resetSecureState();
+  void resetRxRecordAssembly();
+  void handleSecureRx();
+  bool decryptSecureRecord();
+  bool writeSecureRecord(const uint8_t *buffer, size_t size);
+  bool writeClientAll(const uint8_t *buffer, size_t size);
+  void makeSecureNonce(const uint8_t prefix[ESPNETWORKSERIAL_SECURE_NONCE_PREFIX_SIZE],
+                       uint64_t sequence, uint8_t nonce[12]) const;
 
   uint16_t _port;
   WiFiServer _server;
@@ -124,6 +154,26 @@ private:
   size_t _authKeyLength;
   char _clientNonceHex[(ESPNETWORKSERIAL_AUTH_NONCE_SIZE * 2) + 1];
   char _serverNonceHex[(ESPNETWORKSERIAL_AUTH_NONCE_SIZE * 2) + 1];
+
+  bool _secureMode;
+  uint8_t _txKey[ESPNETWORKSERIAL_SECURE_KEY_SIZE];
+  uint8_t _rxKey[ESPNETWORKSERIAL_SECURE_KEY_SIZE];
+  uint8_t _txNoncePrefix[ESPNETWORKSERIAL_SECURE_NONCE_PREFIX_SIZE];
+  uint8_t _rxNoncePrefix[ESPNETWORKSERIAL_SECURE_NONCE_PREFIX_SIZE];
+  uint64_t _txSequence;
+  uint64_t _rxSequence;
+
+  uint8_t _rxRecordHeader[ESPNETWORKSERIAL_SECURE_HEADER_SIZE];
+  size_t _rxRecordHeaderLength;
+  uint16_t _rxCipherLength;
+  uint8_t _rxCipher[ESPNETWORKSERIAL_SECURE_MAX_RECORD];
+  size_t _rxCipherReceived;
+  uint8_t _rxTag[ESPNETWORKSERIAL_SECURE_TAG_SIZE];
+  size_t _rxTagReceived;
+
+  uint8_t _rxPlain[ESPNETWORKSERIAL_SECURE_MAX_RECORD];
+  size_t _rxPlainLength;
+  size_t _rxPlainOffset;
 };
 
 class ESPNetworkSerial : public Stream {

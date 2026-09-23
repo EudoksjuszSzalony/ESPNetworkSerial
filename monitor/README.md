@@ -33,7 +33,7 @@ When a host key is configured, an `auth=none` endpoint is rejected by default to
 
 The environment variables `ESPNS_AUTH_KEY`, `ESPNS_ALLOW_UNAUTHENTICATED`, and `ESPNS_CONFIG` can override file-based configuration.
 
-Authentication controls access to the endpoint, but the current `mode=raw` serial stream remains plaintext and is not integrity-protected after the handshake.
+Authenticated sessions now negotiate `mode=aes256-gcm`. The PSK and fresh client/server nonces feed HKDF-SHA256, which derives independent host→device and device→host AES-256-GCM keys plus nonce prefixes. Serial payload is encrypted and integrity-protected in framed records. Unauthenticated sessions remain `mode=raw` plaintext.
 
 ## Reconnect grace
 
@@ -71,4 +71,4 @@ GitHub Actions runs Go tests and cross-builds standalone binaries for Windows am
 
 ## Current security status
 
-Optional mutual HMAC-SHA256 authentication is implemented. The post-handshake serial data channel is still plaintext TCP without confidentiality or stream integrity, so sensitive deployments should still treat the current transport as trusted-LAN only.
+Optional mutual HMAC-SHA256 authentication is implemented. Authenticated sessions use an AES-256-GCM record layer with directional session keys derived by HKDF-SHA256. Unauthenticated sessions remain plaintext `mode=raw`.

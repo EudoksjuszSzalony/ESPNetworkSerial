@@ -4,7 +4,7 @@
 
 ESPNetworkSerial aims to make network serial feel like ordinary Arduino Serial: select your ESP32 network port, open Serial Monitor, and communicate bidirectionally over Wi-Fi — while keeping OTA available on the same device.
 
-> **Status:** early development / pre-alpha. Native Arduino IDE monitoring, OTA coexistence, reconnect recovery, ESPNS v1 endpoint identification, and optional mutual HMAC-SHA256 authentication are now implemented. The encrypted data-channel design is not final.
+> **Status:** early development / pre-alpha. Native Arduino IDE monitoring, OTA coexistence, reconnect recovery, ESPNS v1 endpoint identification, mutual HMAC-SHA256 authentication, and AES-256-GCM encrypted serial transport are now implemented. Protocol details are still not frozen.
 
 ## Why
 
@@ -143,7 +143,7 @@ and in local `monitor/config.json` (copy `monitor/config.example.json` first):
 
 Both files containing local credentials are excluded from Git.
 
-Authentication is mutual and replay-resistant, but the current raw serial stream remains plaintext TCP. See [Security](docs/security.md) for the exact guarantees and limitations.
+Authenticated sessions derive directional keys with HKDF-SHA256 and carry serial data in AES-256-GCM records, providing payload confidentiality and integrity. Unauthenticated sessions remain plaintext `mode=raw`. See [Security](docs/security.md) for guarantees and limitations.
 
 ## Reconnect behavior
 
@@ -220,7 +220,7 @@ GitHub Wiki can provide the friendly how-to layer, while `docs/` remains the ver
 - [x] ESPNS v1 endpoint/version handshake
 - [x] Arduino OTA + network monitor verified simultaneously during upload/reset
 - [x] Optional mutual HMAC-SHA256 authentication handshake
-- [ ] Encrypted / integrity-protected serial transport
+- [x] Encrypted / integrity-protected AES-256-GCM serial transport
 - [ ] Windows end-user installer
 - [x] Host monitor Go tests + cross-platform CI build workflow
 - [ ] Signed/tagged release builds

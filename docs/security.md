@@ -1,20 +1,40 @@
 # Security
 
-> Status: experimental. HMAC-SHA256 mutual authentication is implemented, but ESPNetworkSerial does **not** yet provide an encrypted or integrity-protected data channel.
+> Status: experimental. Authenticated ESPNS sessions now provide mutual authentication, confidentiality and record integrity using HMAC-SHA256, HKDF-SHA256 and AES-256-GCM. The protocol is still pre-alpha and has not received an external security review.
 
-ESPNetworkSerial carries console data and may allow commands to be sent back to the ESP32, so authentication is part of the protocol rather than an application-specific add-on.
+ESPNetworkSerial carries console data and may allow commands to be sent back to the ESP32, so security is part of the transport rather than an application-specific add-on.
 
-## Current authentication mode
+## Security modes
 
-ESPNS v1 supports optional mutual authentication with a pre-shared key and HMAC-SHA256.
+### No ESPNS key configured
 
-The shared key:
+The endpoint uses:
+
+~~~text
+auth=none mode=raw
+~~~
+
+This is ordinary plaintext TCP and should be treated as trusted-LAN development mode.
+
+### ESPNS key configured
+
+The endpoint uses:
+
+~~~text
+auth=hmac-sha256 mode=aes256-gcm
+~~~
+
+The connection performs mutual challenge/response authentication and then moves to an AES-256-GCM record layer.
+
+## Shared key
+
+The PSK:
 
 - is configured independently from Wi-Fi credentials;
 - is independent from any ArduinoOTA password;
 - is never transmitted over the network;
 - must be between 16 and 128 bytes;
-- should normally be a randomly generated 32-byte value.
+- should normally be a randomly generated value.
 
 The host monitor can generate a suitable key:
 
@@ -22,59 +42,62 @@ The host monitor can generate a suitable key:
 espnetworkserial-monitor.exe --generate-key
 ~~~
 
-The output is a 64-character hexadecimal string representing 32 random bytes. The string itself is used as the shared key, so the exact same text must be configured on both sides.
+The exact generated text is used as the PSK on both sides.
 
-## Mutual challenge/response
+## Mutual authentication
 
-For authenticated sessions the host and ESP32 each generate a fresh 128-bit random nonce.
+The host and ESP32 each generate a fresh 128-bit random nonce for every TCP connection.
 
-The host sends:
+Server and client HMAC proofs bind:
+
+- the ESPNS protocol version;
+- the authentication role (SERVER or CLIENT);
+- both fresh nonces;
+- the negotiated `aes256-gcm` mode.
+
+This authenticates both peers before encrypted serial data is accepted.
+
+## Session key derivation
+
+The PSK is not used directly as an AES key.
+
+HKDF-SHA256 derives four independent pieces of session material from the PSK plus the fresh client/server nonces:
+
+- host → device AES-256 key;
+- device → host AES-256 key;
+- host → device 32-bit nonce prefix;
+- device → host 32-bit nonce prefix.
+
+Every reconnect derives fresh material.
+
+## Record protection
+
+Each direction has an independent 64-bit sequence counter.
+
+The AES-GCM nonce is:
 
 ~~~text
-ESPNS/1 HELLO nonce=<client_nonce>
+4-byte session nonce prefix || 8-byte sequence
 ~~~
 
-The device responds with its own nonce and a server proof:
+The record header containing payload length and sequence number is authenticated as GCM AAD.
 
-~~~text
-ESPNS/1 CHALLENGE auth=hmac-sha256 nonce=<server_nonce> proof=<server_proof> mode=raw
-~~~
+As a result, authenticated mode detects:
 
-The server proof is:
+- ciphertext modification;
+- header modification;
+- forged records;
+- repeated records;
+- reordered records;
+- skipped sequence numbers within the same connection.
 
-~~~text
-HMAC-SHA256(key, "ESPNS/1 SERVER <client_nonce> <server_nonce>")
-~~~
-
-The host verifies the proof before sending its own:
-
-~~~text
-ESPNS/1 AUTH proof=<client_proof>
-~~~
-
-where:
-
-~~~text
-HMAC-SHA256(key, "ESPNS/1 CLIENT <client_nonce> <server_nonce>")
-~~~
-
-The ESP32 verifies that proof with a constant-time comparison and only then enables the raw serial stream.
-
-A fresh pair of nonces is generated for every TCP connection, including reconnects after reset.
+Invalid secure records terminate the connection.
 
 ## Downgrade behavior
 
-If the host has an authentication key configured, an ESPNS endpoint that immediately offers:
+If the host has an authentication key configured, an endpoint offering `auth=none mode=raw` is rejected by default.
 
-~~~text
-auth=none
-~~~
-
-is rejected by default.
-
-This prevents an accidental or malicious downgrade from an authenticated configuration to an unauthenticated one.
-
-The host configuration option:
+The host can deliberately relax this during development with:
 
 ~~~json
 {
@@ -82,57 +105,71 @@ The host configuration option:
 }
 ~~~
 
-can deliberately relax this behavior for development environments that mix authenticated and unauthenticated boards.
+Authenticated endpoints themselves do not fall back from `aes256-gcm` to authenticated plaintext.
 
-## What this protects
+## What authenticated mode protects
 
-The current HMAC handshake provides useful protection against:
+Against an attacker who can observe or modify LAN traffic but does not know the PSK, authenticated mode is designed to provide:
 
-- unauthorized clients opening an authenticated ESPNetworkSerial endpoint without the shared key;
-- accidental connection to a different ESPNS device when authentication is expected;
-- replaying a previously captured authentication proof against a fresh session;
-- protocol downgrade when the host is configured to require authentication.
+- mutual peer authentication;
+- serial-payload confidentiality;
+- serial-record integrity;
+- replay/out-of-order detection within a session;
+- downgrade rejection when the host requires authentication.
 
-## What this does **not** protect
+A passive observer still sees metadata such as IP addresses, TCP timing and approximate encrypted record sizes.
 
-HMAC authentication is **not encryption**.
+## Important limitations
 
-After authentication, the current `mode=raw` stream remains ordinary plaintext TCP. A network attacker able to observe or actively proxy the connection may still:
+### No forward secrecy
 
-- read serial traffic;
-- modify serial traffic;
-- relay an authenticated handshake between the real host and device.
+This is PSK-based security, not an ephemeral Diffie-Hellman exchange.
 
-Therefore this version should still be considered suitable only for trusted LANs when serial contents or commands are sensitive.
+If an attacker records encrypted traffic and later obtains the PSK, the recorded handshake nonces are sufficient to derive those historical session keys.
 
-A future secure transport must add confidentiality and stream integrity, most likely through TLS or an authenticated-encryption layer.
+### Denial of service is not prevented
+
+An attacker can still drop packets, reset TCP connections, flood the listening port or otherwise make the service unavailable.
+
+### Relay attacks are not device identity beyond the PSK
+
+Any device possessing the same PSK is part of the same trust domain. The current protocol does not yet bind a unique device certificate/identity to a particular board.
+
+### Key extraction from firmware
+
+The BasicMonitor example compiles the PSK into firmware. Anyone able to read unprotected flash should be assumed able to recover it.
+
+ESP32 flash encryption / secure boot are separate platform-security topics and are not enabled by this library.
+
+### Pre-alpha cryptographic protocol
+
+The implementation uses standard primitives, but the ESPNS composition, framing and implementation have not been externally audited. Do not treat the current pre-alpha build as a substitute for a reviewed production security protocol.
 
 ## Key storage
 
 ### ESP32
 
-The BasicMonitor example reads `ESPNS_AUTH_KEY` from local `secrets.h`, which is ignored by Git.
-
-The key is compiled into the firmware image. Anyone able to read the firmware/flash should therefore be assumed able to recover the key unless the platform uses additional flash/security protections.
+The example reads `ESPNS_AUTH_KEY` from local `secrets.h`, which is ignored by Git.
 
 ### Host
 
-During development, the monitor reads `config.json` from the directory containing the monitor executable. That file is ignored by Git.
+Development builds read `monitor/config.json`, also ignored by Git.
 
-The following environment variables are also supported:
+Environment overrides:
 
 - `ESPNS_AUTH_KEY`
 - `ESPNS_ALLOW_UNAUTHENTICATED`
 - `ESPNS_CONFIG`
 
-No authentication key is printed to logs.
+No authentication key is intentionally written to monitor logs.
 
 ## Threat model still open before stable v1
 
-- encrypted transport / payload integrity;
-- per-device rather than one-default-key configuration;
-- key rotation and provisioning;
-- secure storage on supported ESP32 variants;
+- external protocol/security review;
+- per-device keys instead of one default key;
+- key rotation/provisioning;
+- secure host credential storage;
+- ESP32 secure key storage;
 - brute-force / connection-rate limiting;
-- discovery metadata that indicates ESPNS security capabilities without becoming a downgrade oracle;
-- secure installer handling of host credentials.
+- authenticated device identity beyond possession of the PSK;
+- optional forward secrecy.
