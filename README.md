@@ -208,6 +208,7 @@ ESPNetworkSerial will be submitted to the Arduino Library Manager registry after
 - [Architecture](docs/architecture.md)
 - [Protocol specification](docs/protocol.md)
 - [Security](docs/security.md)
+- [Testing and hardening](docs/testing.md)
 - [Adding another transport](docs/adding-a-transport.md)
 - [Windows development setup](docs/development-setup.md)
 
@@ -228,6 +229,8 @@ GitHub Wiki can provide the friendly how-to layer, while `docs/` remains the ver
 - [x] Arduino OTA + network monitor verified simultaneously during upload/reset
 - [x] Optional mutual HMAC-SHA256 authentication handshake
 - [x] Encrypted / integrity-protected AES-256-GCM serial transport
+- [x] Secure stream torture tests (boundaries, tamper, replay, truncation, large bidirectional transfer)
+- [x] Go race-detector CI
 - [ ] Windows end-user installer
 - [ ] First tagged public release + Arduino Library Manager registration
 - [x] Host monitor Go tests + cross-platform CI build workflow
