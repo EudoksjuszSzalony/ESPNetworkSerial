@@ -156,6 +156,10 @@ func (c *espnsSecureConn) Write(p []byte) (int, error) {
 			chunkSize = espnsRecordMaxPayload
 		}
 
+		if c.txSequence == ^uint64(0) {
+			return total, fmt.Errorf("ESPNS secure TX sequence exhausted")
+		}
+
 		header := make([]byte, espnsRecordHeaderBytes)
 		binary.BigEndian.PutUint16(header[0:2], uint16(chunkSize))
 		binary.BigEndian.PutUint64(header[2:10], c.txSequence)
@@ -201,6 +205,9 @@ func (c *espnsSecureConn) Read(p []byte) (int, error) {
 
 	if length <= 0 || length > espnsRecordMaxPayload {
 		return 0, fmt.Errorf("invalid ESPNS secure record length %d", length)
+	}
+	if c.rxSequence == ^uint64(0) {
+		return 0, fmt.Errorf("ESPNS secure RX sequence exhausted")
 	}
 	if sequence != c.rxSequence {
 		return 0, fmt.Errorf("invalid ESPNS secure record sequence %d, expected %d", sequence, c.rxSequence)
