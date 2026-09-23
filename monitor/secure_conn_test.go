@@ -91,7 +91,7 @@ func TestSecureConnBidirectionalAndFragmentedReads(t *testing.T) {
 		t.Fatal("device->host plaintext mismatch")
 	}
 
-	for range 2 {
+	for i := 0; i < 2; i++ {
 		if err := <-errCh; err != nil {
 			t.Fatal(err)
 		}
