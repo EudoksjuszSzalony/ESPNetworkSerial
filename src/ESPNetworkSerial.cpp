@@ -131,6 +131,55 @@ int ESPNetworkSerialMux::read() {
   return -1;
 }
 
+size_t ESPNetworkSerialMux::read(uint8_t *buffer, size_t size) {
+  if (buffer == nullptr || size == 0 || _streamCount == 0) {
+    return 0;
+  }
+
+  for (size_t offset = 0; offset < _streamCount; ++offset) {
+    const size_t index = (_nextReadIndex + offset) % _streamCount;
+    Stream *stream = _streams[index];
+
+    const int count = stream->available();
+    if (count <= 0) {
+      continue;
+    }
+
+    size_t request = static_cast<size_t>(count);
+    if (request > size) {
+      request = size;
+    }
+
+    size_t received = 0;
+    if (stream == nullptr) {
+      continue;
+    }
+
+    // Stream itself has no non-blocking bulk-read virtual. Use the optimized
+    // ESPNetworkSerialTCP path when available; companion streams fall back to
+    // byte reads while data remains immediately available.
+    ESPNetworkSerialTCP *network = dynamic_cast<ESPNetworkSerialTCP *>(stream);
+    if (network != nullptr) {
+      received = network->read(buffer, request);
+    } else {
+      while (received < request && stream->available() > 0) {
+        const int value = stream->read();
+        if (value < 0) {
+          break;
+        }
+        buffer[received++] = static_cast<uint8_t>(value);
+      }
+    }
+
+    if (received > 0) {
+      _nextReadIndex = (index + 1) % _streamCount;
+      return received;
+    }
+  }
+
+  return 0;
+}
+
 int ESPNetworkSerialMux::peek() {
   if (_streamCount == 0) {
     return -1;
@@ -253,6 +302,10 @@ int ESPNetworkSerial::available() {
 
 int ESPNetworkSerial::read() {
   return _mux.read();
+}
+
+size_t ESPNetworkSerial::read(uint8_t *buffer, size_t size) {
+  return _mux.read(buffer, size);
 }
 
 int ESPNetworkSerial::peek() {
@@ -1148,6 +1201,58 @@ int ESPNetworkSerialTCP::read() {
     _rxPlainLength = 0;
   }
   return value;
+}
+
+size_t ESPNetworkSerialTCP::read(uint8_t *buffer, size_t size) {
+  if (buffer == nullptr || size == 0) {
+    return 0;
+  }
+
+  if (!(_secureMode && _protocolReady && _client && _client.connected() &&
+        _rxPlainOffset < _rxPlainLength)) {
+    handle();
+  }
+
+  if (!_client || !_client.connected() || !_protocolReady) {
+    return 0;
+  }
+
+  if (!_secureMode) {
+    const int availableBytes = _client.available();
+    if (availableBytes <= 0) {
+      return 0;
+    }
+
+    size_t request = static_cast<size_t>(availableBytes);
+    if (request > size) {
+      request = size;
+    }
+
+    const int count = _client.read(buffer, request);
+    return count > 0 ? static_cast<size_t>(count) : 0;
+  }
+
+  if (_rxPlainOffset >= _rxPlainLength) {
+    handleSecureRx();
+  }
+  if (_rxPlainOffset >= _rxPlainLength) {
+    return 0;
+  }
+
+  size_t count = _rxPlainLength - _rxPlainOffset;
+  if (count > size) {
+    count = size;
+  }
+
+  std::memcpy(buffer, _rxPlain + _rxPlainOffset, count);
+  _rxPlainOffset += count;
+
+  if (_rxPlainOffset >= _rxPlainLength) {
+    _rxPlainOffset = 0;
+    _rxPlainLength = 0;
+  }
+
+  return count;
 }
 
 int ESPNetworkSerialTCP::peek() {

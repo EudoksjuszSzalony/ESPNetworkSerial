@@ -12,7 +12,7 @@
 ESPNetworkSerial StressSerial;
 
 constexpr bool WIFI_DISABLE_SLEEP = true;
-constexpr size_t ECHO_BUFFER_SIZE = 256;
+constexpr size_t ECHO_BUFFER_SIZE = ESPNETWORKSERIAL_SECURE_MAX_RECORD;
 constexpr uint32_t USB_PROGRESS_EVERY_BYTES = 256 * 1024;
 const char *OTA_HOSTNAME = "espnetworkserial-stress";
 
@@ -68,15 +68,7 @@ void loop() {
   static uint64_t nextUsbProgress = USB_PROGRESS_EVERY_BYTES;
 
   uint8_t buffer[ECHO_BUFFER_SIZE];
-  size_t count = 0;
-
-  while (count < sizeof(buffer) && StressSerial.available() > 0) {
-    const int value = StressSerial.read();
-    if (value < 0) {
-      break;
-    }
-    buffer[count++] = static_cast<uint8_t>(value);
-  }
+  const size_t count = StressSerial.read(buffer, sizeof(buffer));
 
   if (count > 0) {
     const size_t written = StressSerial.write(buffer, count);

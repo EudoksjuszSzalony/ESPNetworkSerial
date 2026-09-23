@@ -70,6 +70,7 @@ public:
 
   int available() override;
   int read() override;
+  size_t read(uint8_t *buffer, size_t size);
   int peek() override;
   void flush() override;
 
@@ -111,6 +112,7 @@ public:
 
   int available() override;
   int read() override;
+  size_t read(uint8_t *buffer, size_t size);
   int peek() override;
   void flush() override;
 
@@ -216,6 +218,7 @@ public:
 
   int available() override;
   int read() override;
+  size_t read(uint8_t *buffer, size_t size);
   int peek() override;
   void flush() override;
 
