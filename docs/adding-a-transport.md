@@ -1,8 +1,8 @@
 # Adding Another Transport
 
-> Status: architecture target. Concrete interfaces will be updated when the host monitor implementation lands.
+> Status: evolving architecture. TCP is the current reference transport; extension points are not frozen.
 
-ESPNetworkSerial should make transport extensions boring: implement a small contract, register it, test it, document it.
+ESPNetworkSerial should make transport extensions boring: implement a small contract, register it, test it, document it. Ordinary sketches should keep using the high-level `ESPNetworkSerial` facade rather than becoming coupled to a concrete backend.
 
 ## Expected responsibilities
 
@@ -42,3 +42,18 @@ This interface is illustrative, not yet API-stable.
 7. Document platform limitations.
 
 The first reference implementation will be TCP and will define the concrete extension points used by subsequent transports.
+
+## Firmware-side rule
+
+The public sketch API should remain shaped like:
+
+~~~cpp
+ESPNetworkSerial MySerial;
+MySerial.begin();
+MySerial.handle();
+MySerial.println(...);
+~~~
+
+Concrete backends such as `ESPNetworkSerialTCP` are implementation/advanced-use building blocks. New transports should not force ordinary sketches to rename every API call or manage backend objects manually.
+
+The current facade exposes `tcp()` as an escape hatch for TCP-specific work. Future multi-transport registration may replace or extend that mechanism, so transport-specific APIs should stay out of the common facade unless they make sense for every backend.

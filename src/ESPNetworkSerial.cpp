@@ -10,7 +10,7 @@
 #include <esp_arduino_version.h>
 #endif
 
-ESPNetworkSerialMux ESPSerial;
+ESPNetworkSerial ESPSerial;
 
 ESPNetworkSerialMux::ESPNetworkSerialMux()
     : _streams{}, _streamCount(0), _nextReadIndex(0) {}
@@ -151,6 +151,115 @@ void ESPNetworkSerialMux::flush() {
   for (size_t i = 0; i < _streamCount; ++i) {
     _streams[i]->flush();
   }
+}
+
+
+ESPNetworkSerial::ESPNetworkSerial(uint16_t port)
+    : _mux(), _network(port) {
+  _mux.addStream(_network);
+}
+
+void ESPNetworkSerial::begin() {
+  _network.begin();
+}
+
+void ESPNetworkSerial::end() {
+  _network.end();
+}
+
+void ESPNetworkSerial::handle() {
+  _network.handle();
+}
+
+bool ESPNetworkSerial::addStream(Stream &stream) {
+  if (&stream == &_network) {
+    return true;
+  }
+  return _mux.addStream(stream);
+}
+
+bool ESPNetworkSerial::removeStream(Stream &stream) {
+  if (&stream == &_network) {
+    return false;
+  }
+  return _mux.removeStream(stream);
+}
+
+void ESPNetworkSerial::clearStreams() {
+  _mux.clearStreams();
+  _mux.addStream(_network);
+}
+
+size_t ESPNetworkSerial::streamCount() const {
+  return _mux.streamCount();
+}
+
+bool ESPNetworkSerial::setAuthKey(const char *key) {
+  return _network.setAuthKey(key);
+}
+
+void ESPNetworkSerial::clearAuthKey() {
+  _network.clearAuthKey();
+}
+
+bool ESPNetworkSerial::authenticationEnabled() const {
+  return _network.authenticationEnabled();
+}
+
+bool ESPNetworkSerial::waitForConnection() {
+  return _network.waitForConnection();
+}
+
+bool ESPNetworkSerial::waitForConnection(uint32_t timeoutMs) {
+  return _network.waitForConnection(timeoutMs);
+}
+
+bool ESPNetworkSerial::started() const {
+  return _network.started();
+}
+
+bool ESPNetworkSerial::connected() {
+  return _network.connected();
+}
+
+uint16_t ESPNetworkSerial::port() const {
+  return _network.port();
+}
+
+IPAddress ESPNetworkSerial::remoteIP() {
+  return _network.remoteIP();
+}
+
+ESPNetworkSerialTCP &ESPNetworkSerial::tcp() {
+  return _network;
+}
+
+const ESPNetworkSerialTCP &ESPNetworkSerial::tcp() const {
+  return _network;
+}
+
+size_t ESPNetworkSerial::write(uint8_t byte) {
+  return _mux.write(byte);
+}
+
+size_t ESPNetworkSerial::write(const uint8_t *buffer, size_t size) {
+  return _mux.write(buffer, size);
+}
+
+int ESPNetworkSerial::available() {
+  return _mux.available();
+}
+
+int ESPNetworkSerial::read() {
+  return _mux.read();
+}
+
+int ESPNetworkSerial::peek() {
+  return _mux.peek();
+}
+
+void ESPNetworkSerial::flush() {
+  _mux.flush();
 }
 
 ESPNetworkSerialTCP::ESPNetworkSerialTCP(uint16_t port)

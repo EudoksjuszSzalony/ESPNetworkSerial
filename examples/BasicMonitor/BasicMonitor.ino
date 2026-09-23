@@ -22,11 +22,9 @@ constexpr bool WIFI_DISABLE_SLEEP = true;
 // Optional boot-time monitor wait:
 //   0        = do not wait
 //   12000    = wait up to 12 seconds
-//   UINT32_MAX is not used here; call NetworkSerial.waitForConnection()
+//   UINT32_MAX is not used here; call ESPSerial.waitForConnection()
 //              with no argument if a monitor connection is mandatory.
 constexpr uint32_t NETWORK_SERIAL_WAIT_MS = 12000;
-
-ESPNetworkSerialTCP NetworkSerial;
 
 void setup() {
   Serial.begin(115200);
@@ -109,9 +107,13 @@ void setup() {
 
   ArduinoOTA.begin();
 
+// ESPSerial owns the network transport internally. Add USB Serial as an
+// optional companion stream so one Print/Stream API reaches both transports.
+  ESPSerial.addStream(Serial);
+
 // ESPNS authentication is independent from ArduinoOTA authentication.
 #ifdef ESPNS_AUTH_KEY
-  if (!NetworkSerial.setAuthKey(ESPNS_AUTH_KEY)) {
+  if (!ESPSerial.setAuthKey(ESPNS_AUTH_KEY)) {
     Serial.println("FATAL: ESPNS_AUTH_KEY must be 16..128 bytes.");
     while (true) {
       delay(1000);
@@ -119,22 +121,18 @@ void setup() {
   }
 #endif
 
-  NetworkSerial.begin();
-
-  // One API, two bidirectional streams.
-  ESPSerial.addStream(Serial);
-  ESPSerial.addStream(NetworkSerial);
+  ESPSerial.begin();
 
   // Connection wait modes live here, next to the actual call:
   //   no wait:  remove this waitForConnection() block entirely
-  //   timed:    NetworkSerial.waitForConnection(12000)
-  //   required: NetworkSerial.waitForConnection()
+  //   timed:    ESPSerial.waitForConnection(12000)
+  //   required: ESPSerial.waitForConnection()
   if (NETWORK_SERIAL_WAIT_MS > 0) {
     Serial.print("Waiting for Wi-Fi Serial Monitor (max ");
     Serial.print(NETWORK_SERIAL_WAIT_MS);
     Serial.println(" ms)...");
 
-    if (NetworkSerial.waitForConnection(NETWORK_SERIAL_WAIT_MS)) {
+    if (ESPSerial.waitForConnection(NETWORK_SERIAL_WAIT_MS)) {
       Serial.println("Wi-Fi Serial Monitor connected.");
     } else {
       Serial.println("Wi-Fi Serial Monitor wait timed out; continuing normally.");
@@ -157,17 +155,21 @@ void setup() {
   ESPSerial.print(OTA_TIMEOUT_MS);
   ESPSerial.println(" ms");
   ESPSerial.print("TCP port: ");
-  ESPSerial.println(NetworkSerial.port());
+  ESPSerial.println(ESPSerial.port());
   ESPSerial.print("ESPNS auth: ");
-  ESPSerial.println(NetworkSerial.authenticationEnabled() ? "hmac-sha256" : "none");
-  ESPSerial.println(
-      "Pre-alpha transport: unauthenticated plaintext TCP. "
-      "Use only on a trusted LAN.");
+  ESPSerial.println(ESPSerial.authenticationEnabled() ? "hmac-sha256" : "none");
+  if (ESPSerial.authenticationEnabled()) {
+    ESPSerial.println(
+        "Transport: authenticated plaintext TCP; serial payload is not encrypted.");
+  } else {
+    ESPSerial.println(
+        "Transport: unauthenticated plaintext TCP; use only on a trusted LAN.");
+  }
 }
 
 void loop() {
   ArduinoOTA.handle();
-  NetworkSerial.handle();
+  ESPSerial.handle();
 
   static uint32_t lastStatus = 0;
   if (millis() - lastStatus >= 5000) {

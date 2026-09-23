@@ -126,4 +126,52 @@ private:
   char _serverNonceHex[(ESPNETWORKSERIAL_AUTH_NONCE_SIZE * 2) + 1];
 };
 
-extern ESPNetworkSerialMux ESPSerial;
+class ESPNetworkSerial : public Stream {
+public:
+  explicit ESPNetworkSerial(uint16_t port = ESPNETWORKSERIAL_DEFAULT_PORT);
+
+  // Easy-mode lifecycle. The built-in TCP transport is managed internally.
+  void begin();
+  void end();
+  void handle();
+
+  // Add optional companion streams such as USB Serial. The internal network
+  // transport is always present and is not removed by clearStreams().
+  bool addStream(Stream &stream);
+  bool removeStream(Stream &stream);
+  void clearStreams();
+  size_t streamCount() const;
+
+  // Network/security controls are exposed directly on the facade so sketches
+  // do not need to know about ESPNetworkSerialTCP.
+  bool setAuthKey(const char *key);
+  void clearAuthKey();
+  bool authenticationEnabled() const;
+
+  bool waitForConnection();
+  bool waitForConnection(uint32_t timeoutMs);
+
+  bool started() const;
+  bool connected();
+  uint16_t port() const;
+  IPAddress remoteIP();
+
+  // Advanced escape hatch for transport-specific work.
+  ESPNetworkSerialTCP &tcp();
+  const ESPNetworkSerialTCP &tcp() const;
+
+  using Print::write;
+  size_t write(uint8_t byte) override;
+  size_t write(const uint8_t *buffer, size_t size) override;
+
+  int available() override;
+  int read() override;
+  int peek() override;
+  void flush() override;
+
+private:
+  ESPNetworkSerialMux _mux;
+  ESPNetworkSerialTCP _network;
+};
+
+extern ESPNetworkSerial ESPSerial;

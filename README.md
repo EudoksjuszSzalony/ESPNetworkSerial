@@ -10,7 +10,7 @@ ESPNetworkSerial aims to make network serial feel like ordinary Arduino Serial: 
 
 The project is built around one UX rule: **the sketch should not need duplicate log statements for USB and Wi-Fi.**
 
-The firmware API includes a `Print`/`Stream`-compatible multiplexer, so one call can fan out to multiple bidirectional streams:
+The public firmware API is a `Print`/`Stream`-compatible facade. It owns the default network transport internally and can also fan the same data out to companion streams such as USB Serial:
 
 ~~~cpp
 ESPSerial.println("Boot complete");
@@ -30,33 +30,31 @@ Conceptually:
                       Arduino Serial Monitor
 ~~~
 
-## Current firmware prototype
+## Current firmware API
 
-The current implementation can combine USB Serial with the network stream:
+The normal sketch only needs the single `ESPSerial` object:
 
 ~~~cpp
 #include <ESPNetworkSerial.h>
-
-ESPNetworkSerialTCP NetworkSerial;
 
 void setup() {
     Serial.begin(115200);
 
     // Connect Wi-Fi first...
 
-    NetworkSerial.begin();
-
+    // Optional companion stream: mirror the same RX/TX to USB Serial.
     ESPSerial.addStream(Serial);
-    ESPSerial.addStream(NetworkSerial);
+
+    ESPSerial.begin();
 
     // Optional: wait up to 12 seconds so early boot logs can reach Wi-Fi Serial.
-    NetworkSerial.waitForConnection(12000);
+    ESPSerial.waitForConnection(12000);
 
     ESPSerial.println("Hello over USB and Wi-Fi!");
 }
 
 void loop() {
-    NetworkSerial.handle();
+    ESPSerial.handle();
 
     if (ESPSerial.available()) {
         int c = ESPSerial.read();
@@ -65,7 +63,27 @@ void loop() {
 }
 ~~~
 
-`ESPSerial` broadcasts writes to all attached streams and reads from them using round-robin selection so one busy input does not permanently starve another.
+`ESPSerial` owns the TCP transport internally, broadcasts writes to the network plus all attached companion streams, and reads from them using round-robin selection so one busy input does not permanently starve another.
+
+### Custom object name
+
+If a project does not want the global `ESPSerial` object, instantiate the facade under any name:
+
+~~~cpp
+ESPNetworkSerial DebugSerial;
+
+void setup() {
+    DebugSerial.addStream(Serial);
+    DebugSerial.begin();
+    DebugSerial.println("Custom name, same API.");
+}
+
+void loop() {
+    DebugSerial.handle();
+}
+~~~
+
+Transport internals remain available as advanced APIs through `ESPNetworkSerialTCP`, `ESPNetworkSerialMux`, or `DebugSerial.tcp()`, but ordinary sketches do not need them.
 
 ### Boot-time wait modes
 
@@ -75,9 +93,9 @@ Waiting is optional:
 // no wait
 // Do not call waitForConnection().
 
-NetworkSerial.waitForConnection(12000); // wait at most 12 seconds
+ESPSerial.waitForConnection(12000); // wait at most 12 seconds
 
-NetworkSerial.waitForConnection();      // required: wait indefinitely
+ESPSerial.waitForConnection();      // required: wait indefinitely
 ~~~
 
 The no-argument form is deliberately blocking. Use the timed or no-wait mode if the board must continue running unattended.
@@ -149,9 +167,9 @@ If the ESP32 cannot be reached before the grace period expires, the monitor repo
 ~~~text
 ESP32 sketch
     |
-    +-- ESPSerial multiplexer
-    |      +-- USB Serial
-    |      +-- Network transport
+    +-- ESPSerial facade
+    |      +-- internal Network transport
+    |      +-- optional USB Serial / other Streams
     |
     +-- OTA
            |

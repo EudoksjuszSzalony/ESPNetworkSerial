@@ -31,3 +31,7 @@ jobs:
       - name: Compile BasicMonitor
         run: |
           arduino-cli compile             --fqbn esp32:esp32:esp32             --library .             examples/BasicMonitor
+
+      - name: Compile CustomInstance
+        run: |
+          arduino-cli compile             --fqbn esp32:esp32:esp32             --library .             examples/CustomInstance

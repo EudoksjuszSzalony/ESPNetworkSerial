@@ -6,7 +6,7 @@ ESPNetworkSerial is split into three independent layers.
 
 ## 1. Firmware library
 
-Runs on ESP32 and exposes Arduino-style serial semantics. The main ergonomic goal is a multiplexer that can fan the same output to USB Serial and one or more network sinks without duplicate log calls.
+Runs on ESP32 and exposes Arduino-style serial semantics through a public `ESPNetworkSerial` facade. The facade owns the default network transport internally and can fan the same RX/TX to optional companion streams such as USB Serial without duplicate log calls.
 
 ## 2. Network transport
 
@@ -30,3 +30,32 @@ OTA is intentionally a sibling service rather than part of the serial data path.
 ## Design rule
 
 Protocol- or transport-specific details must not leak through the whole codebase. A new transport should be implementable behind a small interface and registered with the host monitor.
+
+## Firmware API layers
+
+The firmware intentionally has two levels.
+
+### Normal sketch API
+
+~~~cpp
+ESPSerial.begin();
+ESPSerial.addStream(Serial);
+ESPSerial.setAuthKey(...);
+ESPSerial.waitForConnection(12000);
+ESPSerial.println(...);
+ESPSerial.handle();
+~~~
+
+A project may use its own object name instead:
+
+~~~cpp
+ESPNetworkSerial DebugSerial;
+~~~
+
+The complete facade API then follows that object name (`DebugSerial.begin()`, `DebugSerial.port()`, `DebugSerial.println()`, and so on).
+
+### Advanced transport API
+
+`ESPNetworkSerialTCP` and `ESPNetworkSerialMux` remain public building blocks for custom transport composition and experimentation. The facade exposes its built-in TCP backend through `tcp()` as an escape hatch for transport-specific operations.
+
+This split keeps the common API transport-agnostic without removing extensibility.

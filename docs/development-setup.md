@@ -123,9 +123,9 @@ The firmware API supports three practical modes:
 // no wait
 // do not call waitForConnection()
 
-NetworkSerial.waitForConnection(12000); // timed wait
+ESPSerial.waitForConnection(12000); // timed wait
 
-NetworkSerial.waitForConnection();      // required / indefinite wait
+ESPSerial.waitForConnection();      // required / indefinite wait
 ~~~
 
 ## 5. Select the ESP32 network port
@@ -149,7 +149,7 @@ ESPNetworkSerialMonitor.exe
     |
     | TCP 3233
     v
-ESP32 ESPNetworkSerialTCP
+ESP32 ESPNetworkSerial facade / TCP backend
 ~~~
 
 The baud-rate control is intentionally irrelevant for this network transport; bytes are carried over TCP rather than a UART baud rate.
