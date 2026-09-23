@@ -18,7 +18,7 @@ import (
 
 const (
 	monitorName       = "ESPNetworkSerialMonitor"
-	monitorVersion    = "0.4.0-dev"
+	monitorVersion    = "0.5.0-dev"
 	protocolVersion   = 1
 	defaultDevicePort = "3233"
 	dialTimeout       = 4 * time.Second
@@ -574,6 +574,9 @@ func main() {
 	connect := flag.String("connect", "", "directly connect to an ESP32 address for transport testing (host or host:port)")
 	showVersion := flag.Bool("version", false, "print version and exit")
 	generateKey := flag.Bool("generate-key", false, "generate a random 32-byte ESPNS authentication key and exit")
+	stressTarget := flag.String("stress", "", "run binary echo stress test against an ESP32 address (host or host:port)")
+	stressBytes := flag.Int("stress-bytes", 1024*1024, "payload bytes per stress cycle")
+	stressCycles := flag.Int("stress-cycles", 5, "number of connect/authenticate/echo/disconnect stress cycles")
 	flag.Parse()
 
 	if *showVersion {
@@ -598,6 +601,14 @@ func main() {
 	}
 	if auth.enabled() {
 		fmt.Fprintf(os.Stderr, "%s: hmac-sha256 authentication configured from %s\n", monitorName, auth.source)
+	}
+
+	if *stressTarget != "" {
+		if err := stressMode(*stressTarget, auth, *stressBytes, *stressCycles); err != nil {
+			fmt.Fprintln(os.Stderr, "stress error:", err)
+			os.Exit(1)
+		}
+		return
 	}
 
 	if *connect != "" {

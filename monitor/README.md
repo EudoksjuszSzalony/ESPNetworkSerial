@@ -27,7 +27,7 @@ Generate a random 32-byte development key:
 
 Copy `config.example.json` to `config.json` next to the executable and place the generated text in `authKey`. `monitor/config.json` is ignored by Git.
 
-Configure the exact same text on the ESP32 side through `ESPNS_AUTH_KEY` / `NetworkSerial.setAuthKey(...)`.
+Configure the exact same text on the ESP32 side through `ESPNS_AUTH_KEY` / `ESPSerial.setAuthKey(...)` (or the same method on a custom `ESPNetworkSerial` instance).
 
 When a host key is configured, an `auth=none` endpoint is rejected by default to avoid silent downgrade. `allowUnauthenticated=true` can deliberately relax that behavior for mixed development environments.
 
@@ -58,6 +58,22 @@ This runs `go test ./...` and produces `espnetworkserial-monitor.exe` in this di
 ~~~
 
 This bypasses Arduino IDE and bridges stdin/stdout directly to the ESP32 TCP transport. It is useful for separating transport bugs from IDE integration bugs.
+
+## Binary stress test
+
+With the `examples/StressEcho` firmware loaded on the target:
+
+~~~powershell
+.\espnetworkserial-monitor.exe --stress 192.168.1.128
+~~~
+
+Defaults are 1 MiB per cycle and 5 cycles. Override them with:
+
+~~~powershell
+.\espnetworkserial-monitor.exe --stress 192.168.1.128 --stress-bytes 8388608 --stress-cycles 100
+~~~
+
+The tool generates deterministic binary data, sends it through the full ESPNS transport, verifies the echoed bytes exactly, closes the connection, and repeats with a fresh ESPNS handshake/session.
 
 ## Arduino IDE development integration
 

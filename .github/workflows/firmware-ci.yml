@@ -35,3 +35,10 @@ jobs:
       - name: Compile CustomInstance
         run: |
           arduino-cli compile             --fqbn esp32:esp32:esp32             --library .             examples/CustomInstance
+
+      - name: Compile StressEcho
+        run: |
+          arduino-cli compile             --fqbn esp32:esp32:esp32             --library .             examples/StressEcho
+
+
+# StressEcho is compiled below to keep the real-device torture harness buildable.

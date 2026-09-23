@@ -231,6 +231,7 @@ GitHub Wiki can provide the friendly how-to layer, while `docs/` remains the ver
 - [x] Encrypted / integrity-protected AES-256-GCM serial transport
 - [x] Secure stream torture tests (boundaries, tamper, replay, truncation, large bidirectional transfer)
 - [x] Go race-detector CI
+- [x] Real-device binary stress harness (`StressEcho` + `--stress`)
 - [ ] Windows end-user installer
 - [ ] First tagged public release + Arduino Library Manager registration
 - [x] Host monitor Go tests + cross-platform CI build workflow

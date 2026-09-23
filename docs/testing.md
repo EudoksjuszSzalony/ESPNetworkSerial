@@ -83,6 +83,43 @@ Before a protocol release candidate, validate on a real ESP32:
 - authenticated traffic reports `mode=aes256-gcm`;
 - unauthenticated development mode still reports `mode=raw`.
 
+## Real-device binary stress harness
+
+The repository includes `examples/StressEcho`, a minimal byte-for-byte echo firmware intended specifically for transport testing.
+
+Copy its local credentials:
+
+~~~text
+examples/StressEcho/secrets.example.h
+-> examples/StressEcho/secrets.h
+~~~
+
+Use the same Wi-Fi credentials and ESPNS authentication key as the host monitor, then upload `StressEcho` to the ESP32.
+
+Build the host monitor and run:
+
+~~~powershell
+.\monitor\espnetworkserial-monitor.exe --stress 192.168.1.128
+~~~
+
+Default stress parameters:
+
+~~~text
+1 MiB deterministic binary payload per cycle
+5 connect/authenticate/echo/disconnect cycles
+exact byte-for-byte verification
+~~~
+
+Longer runs can be requested explicitly:
+
+~~~powershell
+.\monitor\espnetworkserial-monitor.exe --stress 192.168.1.128 --stress-bytes 8388608 --stress-cycles 100
+~~~
+
+Every cycle creates a new TCP/ESPNS session, so authenticated mode also exercises fresh handshake nonces, HKDF session-key derivation and AES-GCM sequence state repeatedly.
+
+The stress command fails immediately on connection/authentication failure, write/read failure, incomplete echo, or the first wrong echoed byte.
+
 ## Longer-running hardware torture test
 
 Before freezing ESPNS v1, run a dedicated hardware soak test rather than relying only on Arduino Serial Monitor output.
