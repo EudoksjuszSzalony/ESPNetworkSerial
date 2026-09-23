@@ -132,6 +132,11 @@ int ESPNetworkSerialMux::read() {
 }
 
 size_t ESPNetworkSerialMux::read(uint8_t *buffer, size_t size) {
+  return read(buffer, size, nullptr);
+}
+
+size_t ESPNetworkSerialMux::read(uint8_t *buffer, size_t size,
+                                 Stream *bulkStream) {
   if (buffer == nullptr || size == 0 || _streamCount == 0) {
     return 0;
   }
@@ -139,6 +144,9 @@ size_t ESPNetworkSerialMux::read(uint8_t *buffer, size_t size) {
   for (size_t offset = 0; offset < _streamCount; ++offset) {
     const size_t index = (_nextReadIndex + offset) % _streamCount;
     Stream *stream = _streams[index];
+    if (stream == nullptr) {
+      continue;
+    }
 
     const int count = stream->available();
     if (count <= 0) {
@@ -151,16 +159,10 @@ size_t ESPNetworkSerialMux::read(uint8_t *buffer, size_t size) {
     }
 
     size_t received = 0;
-    if (stream == nullptr) {
-      continue;
-    }
-
-    // Stream itself has no non-blocking bulk-read virtual. Use the optimized
-    // ESPNetworkSerialTCP path when available; companion streams fall back to
-    // byte reads while data remains immediately available.
-    ESPNetworkSerialTCP *network = dynamic_cast<ESPNetworkSerialTCP *>(stream);
-    if (network != nullptr) {
-      received = network->read(buffer, request);
+    if (stream == bulkStream) {
+      // The facade passes its known internal TCP transport here. This keeps
+      // the fast path explicit and avoids RTTI, which Arduino ESP32 disables.
+      received = static_cast<ESPNetworkSerialTCP *>(stream)->read(buffer, request);
     } else {
       while (received < request && stream->available() > 0) {
         const int value = stream->read();
@@ -305,7 +307,7 @@ int ESPNetworkSerial::read() {
 }
 
 size_t ESPNetworkSerial::read(uint8_t *buffer, size_t size) {
-  return _mux.read(buffer, size);
+  return _mux.read(buffer, size, &_network);
 }
 
 int ESPNetworkSerial::peek() {
