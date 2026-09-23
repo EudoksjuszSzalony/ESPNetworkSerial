@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func stressMode(target string, auth authSettings, payloadBytes, cycles int, cycleTimeout time.Duration) error {
+func stressMode(target string, auth authSettings, payloadBytes, cycles int, cycleTimeout, cyclePause time.Duration) error {
 	if payloadBytes <= 0 {
 		return fmt.Errorf("stress-bytes must be greater than zero")
 	}
@@ -16,6 +16,9 @@ func stressMode(target string, auth authSettings, payloadBytes, cycles int, cycl
 	}
 	if cycleTimeout <= 0 {
 		return fmt.Errorf("stress-timeout must be greater than zero")
+	}
+	if cyclePause < 0 {
+		return fmt.Errorf("stress-pause must not be negative")
 	}
 
 	address, err := normalizeBoardAddress(target)
@@ -133,6 +136,10 @@ func stressMode(target string, auth authSettings, payloadBytes, cycles int, cycl
 			"%s: stress cycle %d/%d OK — %d bytes echoed, %.2f Mbit/s aggregate\n",
 			monitorName, cycle, cycles, payloadBytes, mbit,
 		)
+
+		if cycle < cycles && cyclePause > 0 {
+			time.Sleep(cyclePause)
+		}
 	}
 
 	elapsed := time.Since(started)

@@ -126,6 +126,12 @@ Longer runs can be requested explicitly:
 
 Every cycle creates a new TCP/ESPNS session, so authenticated mode also exercises fresh handshake nonces, HKDF session-key derivation and AES-GCM sequence state repeatedly.
 
+### Real-device baseline
+
+An Adafruit Feather ESP32 V2 running authenticated `StressEcho` completed the default 5 × 1 MiB profile with exact byte-for-byte verification at about 2.45 Mbit/s aggregate. This is a development measurement from one device/network setup, not a guaranteed throughput figure.
+
+The bulk-read firmware path consumes a verified plaintext record in one buffer copy instead of repeatedly polling the network for each byte.
+
 The stress command fails immediately on connection/authentication failure, write/read failure, incomplete echo, or the first wrong echoed byte.
 
 ## Longer-running hardware torture test

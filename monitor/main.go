@@ -18,7 +18,7 @@ import (
 
 const (
 	monitorName       = "ESPNetworkSerialMonitor"
-	monitorVersion    = "0.5.0-dev"
+	monitorVersion    = "0.6.0-dev"
 	protocolVersion   = 1
 	defaultDevicePort = "3233"
 	dialTimeout       = 4 * time.Second
@@ -578,6 +578,7 @@ func main() {
 	stressBytes := flag.Int("stress-bytes", 1024*1024, "payload bytes per stress cycle")
 	stressCycles := flag.Int("stress-cycles", 5, "number of connect/authenticate/echo/disconnect stress cycles")
 	stressTimeout := flag.Duration("stress-timeout", 2*time.Minute, "maximum duration of one stress cycle")
+	stressPause := flag.Duration("stress-pause", 0, "pause between completed stress cycles")
 	flag.Parse()
 
 	if *showVersion {
@@ -605,7 +606,7 @@ func main() {
 	}
 
 	if *stressTarget != "" {
-		if err := stressMode(*stressTarget, auth, *stressBytes, *stressCycles, *stressTimeout); err != nil {
+		if err := stressMode(*stressTarget, auth, *stressBytes, *stressCycles, *stressTimeout, *stressPause); err != nil {
 			fmt.Fprintln(os.Stderr, "stress error:", err)
 			os.Exit(1)
 		}
