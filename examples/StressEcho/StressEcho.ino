@@ -13,6 +13,7 @@ ESPNetworkSerial StressSerial;
 
 constexpr bool WIFI_DISABLE_SLEEP = true;
 constexpr size_t ECHO_BUFFER_SIZE = 256;
+constexpr uint32_t USB_PROGRESS_EVERY_BYTES = 256 * 1024;
 const char *OTA_HOSTNAME = "espnetworkserial-stress";
 
 void setup() {
@@ -63,6 +64,9 @@ void loop() {
   ArduinoOTA.handle();
   StressSerial.handle();
 
+  static uint64_t totalEchoed = 0;
+  static uint64_t nextUsbProgress = USB_PROGRESS_EVERY_BYTES;
+
   uint8_t buffer[ECHO_BUFFER_SIZE];
   size_t count = 0;
 
@@ -75,6 +79,15 @@ void loop() {
   }
 
   if (count > 0) {
-    StressSerial.write(buffer, count);
+    const size_t written = StressSerial.write(buffer, count);
+    totalEchoed += written;
+
+    if (totalEchoed >= nextUsbProgress) {
+      Serial.print("[StressEcho] echoed_bytes=");
+      Serial.println(static_cast<unsigned long long>(totalEchoed));
+      while (nextUsbProgress <= totalEchoed) {
+        nextUsbProgress += USB_PROGRESS_EVERY_BYTES;
+      }
+    }
   }
 }

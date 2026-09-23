@@ -107,13 +107,21 @@ Default stress parameters:
 ~~~text
 1 MiB deterministic binary payload per cycle
 5 connect/authenticate/echo/disconnect cycles
+2 minute timeout per cycle
 exact byte-for-byte verification
+10% progress reports
+~~~
+
+For a quick diagnostic run:
+
+~~~powershell
+.\monitor\espnetworkserial-monitor.exe --stress 192.168.1.128 --stress-bytes 4096 --stress-cycles 1
 ~~~
 
 Longer runs can be requested explicitly:
 
 ~~~powershell
-.\monitor\espnetworkserial-monitor.exe --stress 192.168.1.128 --stress-bytes 8388608 --stress-cycles 100
+.\monitor\espnetworkserial-monitor.exe --stress 192.168.1.128 --stress-bytes 8388608 --stress-cycles 100 --stress-timeout 5m
 ~~~
 
 Every cycle creates a new TCP/ESPNS session, so authenticated mode also exercises fresh handshake nonces, HKDF session-key derivation and AES-GCM sequence state repeatedly.

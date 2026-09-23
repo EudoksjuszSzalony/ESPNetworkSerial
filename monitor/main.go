@@ -577,6 +577,7 @@ func main() {
 	stressTarget := flag.String("stress", "", "run binary echo stress test against an ESP32 address (host or host:port)")
 	stressBytes := flag.Int("stress-bytes", 1024*1024, "payload bytes per stress cycle")
 	stressCycles := flag.Int("stress-cycles", 5, "number of connect/authenticate/echo/disconnect stress cycles")
+	stressTimeout := flag.Duration("stress-timeout", 2*time.Minute, "maximum duration of one stress cycle")
 	flag.Parse()
 
 	if *showVersion {
@@ -604,7 +605,7 @@ func main() {
 	}
 
 	if *stressTarget != "" {
-		if err := stressMode(*stressTarget, auth, *stressBytes, *stressCycles); err != nil {
+		if err := stressMode(*stressTarget, auth, *stressBytes, *stressCycles, *stressTimeout); err != nil {
 			fmt.Fprintln(os.Stderr, "stress error:", err)
 			os.Exit(1)
 		}

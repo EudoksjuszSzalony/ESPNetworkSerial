@@ -67,10 +67,16 @@ With the `examples/StressEcho` firmware loaded on the target:
 .\espnetworkserial-monitor.exe --stress 192.168.1.128
 ~~~
 
-Defaults are 1 MiB per cycle and 5 cycles. Override them with:
+Defaults are 1 MiB per cycle, 5 cycles and a 2-minute timeout per cycle. The command reports connection state plus 10% echo progress. Override them with:
 
 ~~~powershell
-.\espnetworkserial-monitor.exe --stress 192.168.1.128 --stress-bytes 8388608 --stress-cycles 100
+.\espnetworkserial-monitor.exe --stress 192.168.1.128 --stress-bytes 8388608 --stress-cycles 100 --stress-timeout 5m
+~~~
+
+For a very small diagnostic run:
+
+~~~powershell
+.\espnetworkserial-monitor.exe --stress 192.168.1.128 --stress-bytes 4096 --stress-cycles 1
 ~~~
 
 The tool generates deterministic binary data, sends it through the full ESPNS transport, verifies the echoed bytes exactly, closes the connection, and repeats with a fresh ESPNS handshake/session.

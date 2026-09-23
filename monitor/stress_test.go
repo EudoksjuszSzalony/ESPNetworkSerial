@@ -9,6 +9,7 @@ import (
 	"net"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestStressModeAuthenticatedEchoAcrossFreshSessions(t *testing.T) {
@@ -46,7 +47,7 @@ func TestStressModeAuthenticatedEchoAcrossFreshSessions(t *testing.T) {
 		serverErr <- nil
 	}()
 
-	if err := stressMode(listener.Addr().String(), auth, payloadBytes, cycles); err != nil {
+	if err := stressMode(listener.Addr().String(), auth, payloadBytes, cycles, 10*time.Second); err != nil {
 		t.Fatal(err)
 	}
 

@@ -3,17 +3,19 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"os"
 	"time"
 )
 
-func stressMode(target string, auth authSettings, payloadBytes, cycles int) error {
+func stressMode(target string, auth authSettings, payloadBytes, cycles int, cycleTimeout time.Duration) error {
 	if payloadBytes <= 0 {
 		return fmt.Errorf("stress-bytes must be greater than zero")
 	}
 	if cycles <= 0 {
 		return fmt.Errorf("stress-cycles must be greater than zero")
+	}
+	if cycleTimeout <= 0 {
+		return fmt.Errorf("stress-timeout must be greater than zero")
 	}
 
 	address, err := normalizeBoardAddress(target)
@@ -31,26 +33,79 @@ func stressMode(target string, auth authSettings, payloadBytes, cycles int) erro
 		fillStressPayload(payload, cycle)
 		clear(received)
 
+		fmt.Fprintf(
+			os.Stderr,
+			"%s: stress cycle %d/%d connecting to %s...\n",
+			monitorName, cycle, cycles, address,
+		)
+
 		conn, err := dialESPNS(address, dialTimeout, auth)
 		if err != nil {
 			return fmt.Errorf("stress cycle %d connect to %s: %w", cycle, address, err)
 		}
 
 		cycleStarted := time.Now()
+		deadline := cycleStarted.Add(cycleTimeout)
+		if err := conn.SetDeadline(deadline); err != nil {
+			_ = conn.Close()
+			return fmt.Errorf("stress cycle %d set deadline: %w", cycle, err)
+		}
+
+		fmt.Fprintf(
+			os.Stderr,
+			"%s: stress cycle %d/%d connected; transferring %d bytes (timeout %s)...\n",
+			monitorName, cycle, cycles, payloadBytes, cycleTimeout,
+		)
+
 		writeErr := make(chan error, 1)
 		go func() {
 			_, err := conn.Write(payload)
+			if err != nil {
+				_ = conn.Close()
+			}
 			writeErr <- err
 		}()
 
-		_, readErr := io.ReadFull(conn, received)
-		if readErr != nil {
-			_ = conn.Close()
-			return fmt.Errorf("stress cycle %d read: %w", cycle, readErr)
+		offset := 0
+		nextProgress := 10
+		for offset < len(received) {
+			n, readErr := conn.Read(received[offset:])
+			if n > 0 {
+				offset += n
+				percent := (offset * 100) / len(received)
+				for percent >= nextProgress && nextProgress <= 90 {
+					fmt.Fprintf(
+						os.Stderr,
+						"%s: stress cycle %d/%d progress %d%% (%d/%d bytes echoed)\n",
+						monitorName, cycle, cycles, nextProgress, offset, payloadBytes,
+					)
+					nextProgress += 10
+				}
+			}
+			if readErr != nil {
+				_ = conn.Close()
+				return fmt.Errorf(
+					"stress cycle %d read after %d/%d echoed bytes: %w",
+					cycle, offset, payloadBytes, readErr,
+				)
+			}
+			if n == 0 {
+				_ = conn.Close()
+				return fmt.Errorf(
+					"stress cycle %d read made no progress after %d/%d echoed bytes",
+					cycle, offset, payloadBytes,
+				)
+			}
 		}
+
 		if err := <-writeErr; err != nil {
 			_ = conn.Close()
 			return fmt.Errorf("stress cycle %d write: %w", cycle, err)
+		}
+
+		if err := conn.SetDeadline(time.Time{}); err != nil {
+			_ = conn.Close()
+			return fmt.Errorf("stress cycle %d clear deadline: %w", cycle, err)
 		}
 
 		if !bytes.Equal(received, payload) {
