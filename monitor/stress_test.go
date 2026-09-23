@@ -47,7 +47,7 @@ func TestStressModeAuthenticatedEchoAcrossFreshSessions(t *testing.T) {
 		serverErr <- nil
 	}()
 
-	if err := stressMode(listener.Addr().String(), auth, payloadBytes, cycles, 10*time.Second); err != nil {
+	if err := stressMode(listener.Addr().String(), auth, payloadBytes, cycles, 10*time.Second, 0); err != nil {
 		t.Fatal(err)
 	}
 
