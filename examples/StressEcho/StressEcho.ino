@@ -1,4 +1,5 @@
 #include <WiFi.h>
+#include <ArduinoOTA.h>
 #include <ESPNetworkSerial.h>
 
 #if __has_include("secrets.h")
@@ -12,6 +13,7 @@ ESPNetworkSerial StressSerial;
 
 constexpr bool WIFI_DISABLE_SLEEP = true;
 constexpr size_t ECHO_BUFFER_SIZE = 256;
+const char *OTA_HOSTNAME = "espnetworkserial-stress";
 
 void setup() {
   Serial.begin(115200);
@@ -32,6 +34,9 @@ void setup() {
   }
   Serial.println();
 
+  ArduinoOTA.setHostname(OTA_HOSTNAME);
+  ArduinoOTA.begin();
+
 #ifdef ESPNS_AUTH_KEY
   if (!StressSerial.setAuthKey(ESPNS_AUTH_KEY)) {
     Serial.println("FATAL: ESPNS_AUTH_KEY must be 16..128 bytes.");
@@ -50,9 +55,12 @@ void setup() {
   Serial.println(StressSerial.port());
   Serial.print("ESPNS auth: ");
   Serial.println(StressSerial.authenticationEnabled() ? "hmac-sha256 + aes256-gcm" : "none + raw");
+  Serial.print("OTA hostname: ");
+  Serial.println(OTA_HOSTNAME);
 }
 
 void loop() {
+  ArduinoOTA.handle();
   StressSerial.handle();
 
   uint8_t buffer[ECHO_BUFFER_SIZE];
