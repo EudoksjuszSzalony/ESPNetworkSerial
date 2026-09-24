@@ -52,3 +52,29 @@ func TestGenerateAuthKeyHex(t *testing.T) {
 		t.Fatalf("generated key length = %d, want 64 hex chars", len(key))
 	}
 }
+
+
+func TestLoadAuthSettingsAcceptsUTF8BOM(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	data := append([]byte{0xEF, 0xBB, 0xBF},
+		[]byte(`{"authKey":"0123456789abcdef","allowUnauthenticated":false}`)...)
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("ESPNS_CONFIG", path)
+	t.Setenv("ESPNS_AUTH_KEY", "")
+	t.Setenv("ESPNS_ALLOW_UNAUTHENTICATED", "")
+
+	settings, err := loadAuthSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(settings.key) != "0123456789abcdef" {
+		t.Fatalf("unexpected key %q", settings.key)
+	}
+	if settings.allowUnauthenticated {
+		t.Fatal("expected allowUnauthenticated=false")
+	}
+}

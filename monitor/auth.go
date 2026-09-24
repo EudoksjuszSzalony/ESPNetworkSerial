@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -47,6 +48,11 @@ func loadAuthSettings() (authSettings, error) {
 		data, err := os.ReadFile(configPath)
 		switch {
 		case err == nil:
+			// Windows PowerShell 5.x writes a UTF-8 BOM when using
+			// Set-Content -Encoding UTF8. Accept it so a perfectly valid
+			// user-created config.json does not make the monitor exit at startup.
+			data = bytes.TrimPrefix(data, []byte{0xEF, 0xBB, 0xBF})
+
 			var cfg monitorConfigFile
 			if err := json.Unmarshal(data, &cfg); err != nil {
 				return settings, fmt.Errorf("parse %s: %w", configPath, err)
