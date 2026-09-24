@@ -187,6 +187,18 @@ For tests 1-3 and 5, run the host with `--stress-recover`. For test 4, the same 
 
 The TCP-only test uses the advanced `ESPNetworkSerialTCP::disconnectClient()` diagnostic control. It closes the active protocol client and clears session cryptographic state while leaving the listening server and Wi-Fi association alive.
 
+### Real-device fault-test results
+
+The current SW38 fault-test suite has been exercised on an Adafruit Feather ESP32 V2 with authenticated AES-256-GCM traffic:
+
+- **1 click — ESP restart:** PASS. The active transfer is interrupted, the board reboots, and the host establishes a fresh authenticated ESPNS session.
+- **2 clicks — Wi-Fi disconnect:** PASS. The MCU remains alive, the station disconnects for 8 seconds, reconnects to the same AP, and the host recovers with a fresh authenticated session.
+- **3 clicks — Wi-Fi subsystem off:** PASS after explicitly stopping ESPNS and ArduinoOTA before `WIFI_OFF`. Wi-Fi is re-enabled after 8 seconds, services restart after association, and the host recovers without a Guru Meditation fault.
+- **4 clicks — application `delay(8000)`:** PASS. Echo progress pauses for about 8 seconds and continues on the same connection without session recovery.
+- **5 clicks — TCP/ESPNS client close only:** PASS for recovery behavior. Wi-Fi remains associated while the active ESPNS client is deliberately closed; the host detects the break and authenticates a fresh session.
+
+The fault tests above may be terminated manually after the intended recovery behavior is observed; a full 8 MiB completion is not required for every individual fault-injection check.
+
 ## Longer-running hardware torture test
 
 Before freezing ESPNS v1, run a dedicated hardware soak test rather than relying only on Arduino Serial Monitor output.
