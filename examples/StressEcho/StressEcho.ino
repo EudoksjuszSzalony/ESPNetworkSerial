@@ -37,11 +37,11 @@ uint8_t pendingClicks = 0;
 
 void printFaultTestMenu() {
   Serial.println("[FAULT TEST] SW38 test selector:");
-  Serial.println("[FAULT TEST]   1 click  = application delay(8000)");
+  Serial.println("[FAULT TEST]   1 click  = ESP.restart()");
   Serial.println("[FAULT TEST]   2 clicks = WiFi.disconnect() for 8 s");
   Serial.println("[FAULT TEST]   3 clicks = WIFI_OFF for 8 s");
-  Serial.println("[FAULT TEST]   4 clicks = close active ESPNS TCP client only");
-  Serial.println("[FAULT TEST]   5 clicks = ESP.restart()");
+  Serial.println("[FAULT TEST]   4 clicks = application delay(8000)");
+  Serial.println("[FAULT TEST]   5 clicks = close active ESPNS TCP client only");
 }
 
 void requestWiFiReconnect() {
@@ -60,11 +60,10 @@ void runFaultTest(uint8_t clicks) {
 
   switch (clicks) {
     case 1:
-      Serial.print("[FAULT TEST] application stall: delay(");
-      Serial.print(FAULT_TEST_DURATION_MS);
-      Serial.println(")");
-      delay(FAULT_TEST_DURATION_MS);
-      Serial.println("[FAULT TEST] application resumed; Wi-Fi/TCP were left untouched");
+      Serial.println("[FAULT TEST] restarting ESP32 in 250 ms");
+      Serial.flush();
+      delay(250);
+      ESP.restart();
       break;
 
     case 2:
@@ -84,15 +83,16 @@ void runFaultTest(uint8_t clicks) {
       break;
 
     case 4:
-      Serial.println("[FAULT TEST] closing active ESPNS TCP client; Wi-Fi remains connected");
-      StressSerial.tcp().disconnectClient();
+      Serial.print("[FAULT TEST] application stall: delay(");
+      Serial.print(FAULT_TEST_DURATION_MS);
+      Serial.println(")");
+      delay(FAULT_TEST_DURATION_MS);
+      Serial.println("[FAULT TEST] application resumed; Wi-Fi/TCP were left untouched");
       break;
 
     case 5:
-      Serial.println("[FAULT TEST] restarting ESP32 in 250 ms");
-      Serial.flush();
-      delay(250);
-      ESP.restart();
+      Serial.println("[FAULT TEST] closing active ESPNS TCP client; Wi-Fi remains connected");
+      StressSerial.tcp().disconnectClient();
       break;
 
     default:

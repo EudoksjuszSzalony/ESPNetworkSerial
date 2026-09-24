@@ -169,15 +169,15 @@ After the final click is released, wait about 650 ms for the click group to be r
 
 | Clicks | Test | Expected transport behavior |
 | ---: | --- | --- |
-| 1 | `delay(8000)` application stall | Same Wi-Fi/TCP/ESPNS session should normally continue; no recovery expected |
+| 1 | `ESP.restart()` | Full MCU restart; fresh ESPNS session required |
 | 2 | `WiFi.disconnect()` for 8 s | Active session breaks; host recovery establishes a fresh ESPNS session |
 | 3 | `WIFI_OFF` for 8 s | Wi-Fi subsystem is disabled while MCU/application state survives; fresh ESPNS session required |
-| 4 | Close active ESPNS TCP client only | Wi-Fi remains associated; fresh TCP/ESPNS session required |
-| 5 | `ESP.restart()` | Full MCU restart; fresh ESPNS session required |
+| 4 | `delay(8000)` application stall | Same Wi-Fi/TCP/ESPNS session should normally continue; no recovery expected |
+| 5 | Close active ESPNS TCP client only | Wi-Fi remains associated; fresh TCP/ESPNS session required |
 
-The Wi-Fi tests are scheduled non-blockingly: the sketch remains alive during the 8-second network outage. Test 1 intentionally does the opposite and blocks the Arduino application task with a real `delay(8000)`, because ordinary user sketches may contain long delays.
+The Wi-Fi tests are scheduled non-blockingly: the sketch remains alive during the 8-second network outage. Test 4 intentionally does the opposite and blocks the Arduino application task with a real `delay(8000)`, because ordinary user sketches may contain long delays.
 
-For tests 2-5, run the host with `--stress-recover`. For test 1, the same command is useful because an unexpected disconnect will be visible as a recovery instead of being mistaken for a normal pause.
+For tests 1-3 and 5, run the host with `--stress-recover`. For test 4, the same command is useful because an unexpected disconnect will be visible as a recovery instead of being mistaken for a normal pause.
 
 The TCP-only test uses the advanced `ESPNetworkSerialTCP::disconnectClient()` diagnostic control. It closes the active protocol client and clears session cryptographic state while leaving the listening server and Wi-Fi association alive.
 
