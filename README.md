@@ -10,7 +10,7 @@ ESPNetworkSerial aims to make network serial feel like ordinary Arduino Serial: 
 
 The project is built around one UX rule: **the sketch should not need duplicate log statements for USB and Wi-Fi.**
 
-The public firmware API is a `Print`/`Stream`-compatible facade. It owns the default network transport internally and can also fan the same data out to companion streams such as USB Serial:
+The public firmware API is a `Print`/`Stream`-compatible facade. The built-in global `ESPSerial` is the zero-boilerplate path: `ESPSerial.begin()` starts the network transport, initializes Arduino's default `Serial` at 115200, and mirrors the same RX/TX locally and over Wi-Fi:
 
 ~~~cpp
 ESPSerial.println("Boot complete");
@@ -24,7 +24,7 @@ Conceptually:
           +----------+----------+
           |                     |
           v                     v
-     USB Serial          Network Serial
+  Default Serial         Network Serial
                                |
                                v
                       Arduino Serial Monitor
@@ -38,13 +38,9 @@ The normal sketch only needs the single `ESPSerial` object:
 #include <ESPNetworkSerial.h>
 
 void setup() {
-    Serial.begin(115200);
-
     // Connect Wi-Fi first...
 
-    // Optional companion stream: mirror the same RX/TX to USB Serial.
-    ESPSerial.addStream(Serial);
-
+    // Starts ESPNS and automatically enables/mirrors Arduino Serial at 115200.
     ESPSerial.begin();
 
     // Optional: wait up to 12 seconds so early boot logs can reach Wi-Fi Serial.
@@ -63,7 +59,7 @@ void loop() {
 }
 ~~~
 
-`ESPSerial` owns the TCP transport internally, broadcasts writes to the network plus all attached companion streams, and reads from them using round-robin selection so one busy input does not permanently starve another.
+`ESPSerial` owns the TCP transport internally. The global object automatically includes Arduino's default `Serial`, so normal sketches do **not** need `Serial.begin(...)` or `ESPSerial.addStream(Serial)`. Writes go to local Serial and the network with one call; reads are selected fairly across available inputs. Define `ESPNETWORKSERIAL_GLOBAL_SERIAL_MIRROR=0` before including the library to opt out, or override `ESPNETWORKSERIAL_GLOBAL_SERIAL_BAUD` if 115200 is not appropriate.
 
 ### Custom object name
 
@@ -73,6 +69,7 @@ If a project does not want the global `ESPSerial` object, instantiate the facade
 ESPNetworkSerial DebugSerial;
 
 void setup() {
+    Serial.begin(115200);
     DebugSerial.addStream(Serial);
     DebugSerial.begin();
     DebugSerial.println("Custom name, same API.");
@@ -83,7 +80,16 @@ void loop() {
 }
 ~~~
 
-Transport internals remain available as advanced APIs through `ESPNetworkSerialTCP`, `ESPNetworkSerialMux`, or `DebugSerial.tcp()`, but ordinary sketches do not need them.
+Custom `ESPNetworkSerial` instances intentionally stay explicit and do not automatically claim the global Arduino `Serial`; this avoids surprising libraries or sketches that need different stream ownership. Transport internals remain available as advanced APIs through `ESPNetworkSerialTCP`, `ESPNetworkSerialMux`, or `DebugSerial.tcp()`, but ordinary sketches do not need them.
+
+## Examples
+
+- **BasicMonitor** — monitor-only example. No ArduinoOTA service is started. It advertises the ESPNS endpoint through mDNS so Arduino IDE can discover the board as a network port for Serial Monitor.
+- **WirelessOTAAndMonitor** — adds ArduinoOTA to the same device and demonstrates OTA + ESPNetworkSerial coexistence. Ordinary application logs use `ESPSerial`; OTA progress/error callbacks intentionally use local `Serial` only to avoid extra traffic during the upload.
+- **CustomInstance** — demonstrates an explicitly named `ESPNetworkSerial` object and manual companion-stream selection.
+- **StressEcho** — transport torture/fault-injection firmware used for hardware validation.
+
+> In **BasicMonitor**, mDNS discovery is for monitoring only; network OTA upload is not enabled by that sketch. Use **WirelessOTAAndMonitor** when OTA upload is required.
 
 ### Boot-time wait modes
 

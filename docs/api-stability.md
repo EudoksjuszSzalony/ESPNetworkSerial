@@ -25,9 +25,11 @@ extern ESPNetworkSerial ESPSerial;
 
 ## Behavioral commitments
 
-- `begin()` starts the built-in network serial listener.
+- `begin()` starts the built-in network serial listener. On the global `ESPSerial` convenience object it also initializes Arduino's default `Serial` at `ESPNETWORKSERIAL_GLOBAL_SERIAL_BAUD` (115200 by default) and attaches it as a companion stream unless `ESPNETWORKSERIAL_GLOBAL_SERIAL_MIRROR` is disabled.
 - `end()` stops the listener and active ESPNS client.
 - `handle()` services connection, handshake, and receive state and is safe to call frequently from `loop()`.
+- global `ESPSerial` therefore mirrors writes/reads to the default Arduino Serial without requiring separate `Serial.begin()` or `addStream(Serial)` calls;
+- custom `ESPNetworkSerial` instances do not automatically claim the global Arduino Serial;
 - writes are fanned out to the network transport and attached companion streams;
 - reads are selected fairly across available inputs;
 - `clearStreams()` removes companions but keeps the built-in network transport;

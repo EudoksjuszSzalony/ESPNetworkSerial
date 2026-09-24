@@ -102,20 +102,25 @@ Copy `monitor/config.example.json` to `monitor/config.json` and put the **same**
 
 `monitor/config.json` is also ignored by Git. ESPNS authentication is separate from Wi-Fi security and from any ArduinoOTA password.
 
-## 4. Flash the BasicMonitor example over USB once
+## 4. Flash a monitor example over USB once
 
-Open:
+For the smallest monitor-only sketch, open:
 
 ~~~text
 examples/BasicMonitor/BasicMonitor.ino
 ~~~
 
-The example starts both:
+BasicMonitor starts ESPNetworkSerial on TCP port `3233` and publishes an Arduino-compatible mDNS network-port advertisement for Serial Monitor discovery. It does **not** start ArduinoOTA, so network upload is intentionally unavailable in this example.
 
-- ArduinoOTA, which advertises the ESP32 as Arduino's normal `network` port via mDNS;
-- ESPNetworkSerial TCP on port `3233`.
+For simultaneous OTA + monitor testing, use:
 
-By default the example waits up to 12 seconds for a Wi-Fi Serial Monitor connection before printing the main startup banner. This gives the monitor time to attach and capture early logs without permanently blocking an unattended board. BasicMonitor also sets ArduinoOTA's receive timeout to 5000 ms (the ESP32 core default is 1000 ms) to tolerate brief Wi-Fi stalls during upload.
+~~~text
+examples/WirelessOTAAndMonitor/WirelessOTAAndMonitor.ino
+~~~
+
+That example starts both ArduinoOTA and ESPNetworkSerial. ArduinoOTA owns the normal `_arduino._tcp` advertisement and upload service while ESPNetworkSerial serves monitor traffic on TCP `3233`.
+
+The global `ESPSerial.begin()` initializes and mirrors Arduino's default `Serial` automatically at 115200, so these examples do not need separate `Serial.begin(...)` or `ESPSerial.addStream(Serial)` boilerplate.
 
 The firmware API supports three practical modes:
 
@@ -160,9 +165,9 @@ The example prints an uptime line every five seconds. Text sent from Arduino IDE
 
 USB Serial stays enabled at the same time, so the same `ESPSerial.println(...)` output is visible over both transports.
 
-## OTA reliability diagnostics
+## OTA reliability diagnostics (WirelessOTAAndMonitor)
 
-BasicMonitor prints the Feather's own Wi-Fi RSSI in the startup banner and every five seconds, so OTA failures can be correlated with the signal seen by the actual target board. For development testing it also disables ESP32 Wi-Fi modem sleep and explicitly enables auto-reconnect, favoring connection stability over power saving.
+WirelessOTAAndMonitor prints the Feather's own Wi-Fi RSSI in the startup banner and every five seconds, so OTA failures can be correlated with the signal seen by the actual target board. For development testing it also disables ESP32 Wi-Fi modem sleep and explicitly enables auto-reconnect, favoring connection stability over power saving.
 
 OTA callbacks also print start/progress/error diagnostics to **USB Serial only**. Keeping those diagnostics off the Wi-Fi Serial stream avoids adding extra network traffic during the firmware transfer.
 

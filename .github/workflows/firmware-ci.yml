@@ -32,6 +32,10 @@ jobs:
         run: |
           arduino-cli compile             --fqbn esp32:esp32:esp32             --library .             examples/BasicMonitor
 
+      - name: Compile WirelessOTAAndMonitor
+        run: |
+          arduino-cli compile             --fqbn esp32:esp32:esp32             --library .             examples/WirelessOTAAndMonitor
+
       - name: Compile CustomInstance
         run: |
           arduino-cli compile             --fqbn esp32:esp32:esp32             --library .             examples/CustomInstance
@@ -40,5 +44,3 @@ jobs:
         run: |
           arduino-cli compile             --fqbn esp32:esp32:esp32             --library .             examples/StressEcho
 
-
-# StressEcho is compiled below to keep the real-device torture harness buildable.

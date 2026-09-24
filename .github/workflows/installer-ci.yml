@@ -27,7 +27,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Path "installer\windows\payload" -Force | Out-Null
           Push-Location monitor
-          go build -trimpath -ldflags="-s -w -X main.monitorVersion=0.0.18-ci" -o "..\installer\windows\payload\espnetworkserial-monitor.exe" .
+          go build -trimpath -ldflags="-s -w -X main.monitorVersion=0.0.20-ci" -o "..\installer\windows\payload\espnetworkserial-monitor.exe" .
           Pop-Location
           Copy-Item LICENSE "installer\windows\payload\LICENSE"
           Copy-Item "monitor\README.md" "installer\windows\payload\README.md"
@@ -46,7 +46,7 @@ jobs:
         run: |
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path -LiteralPath $iscc)) { throw "ISCC.exe not found at $iscc" }
-          & $iscc "/DAppVersion=0.0.18-ci" "installer\windows\ESPNetworkSerial.iss"
+          & $iscc "/DAppVersion=0.0.20-ci" "installer\windows\ESPNetworkSerial.iss"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - uses: actions/upload-artifact@v4

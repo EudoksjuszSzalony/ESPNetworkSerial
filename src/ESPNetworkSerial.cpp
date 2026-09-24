@@ -207,11 +207,23 @@ void ESPNetworkSerialMux::flush() {
 
 
 ESPNetworkSerial::ESPNetworkSerial(uint16_t port)
-    : _mux(), _network(port) {
+    : _mux(), _network(port), _globalSerialAttached(false) {
   _mux.addStream(_network);
 }
 
 void ESPNetworkSerial::begin() {
+#if ESPNETWORKSERIAL_GLOBAL_SERIAL_MIRROR
+  // The built-in ESPSerial object is the zero-boilerplate path: initialize
+  // Arduino's default Serial and mirror it automatically. Custom instances
+  // stay explicit so libraries/sketches can choose their own companion streams.
+  if (this == &ESPSerial && !_globalSerialAttached) {
+    Serial.begin(ESPNETWORKSERIAL_GLOBAL_SERIAL_BAUD);
+    if (_mux.addStream(Serial)) {
+      _globalSerialAttached = true;
+    }
+  }
+#endif
+
   _network.begin();
 }
 

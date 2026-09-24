@@ -4,7 +4,7 @@
 #define MyAppExeName "espnetworkserial-monitor.exe"
 
 #ifndef AppVersion
-  #define AppVersion "0.0.18-dev"
+  #define AppVersion "0.0.20-dev"
 #endif
 
 [Setup]

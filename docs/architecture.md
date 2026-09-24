@@ -6,7 +6,7 @@ ESPNetworkSerial is split into three independent layers.
 
 ## 1. Firmware library
 
-Runs on ESP32 and exposes Arduino-style serial semantics through a public `ESPNetworkSerial` facade. The facade owns the default network transport internally and can fan the same RX/TX to optional companion streams such as USB Serial without duplicate log calls.
+Runs on ESP32 and exposes Arduino-style serial semantics through a public `ESPNetworkSerial` facade. The global `ESPSerial` convenience object owns the default network transport and automatically mirrors the same RX/TX to Arduino's default `Serial`, so ordinary sketches do not need duplicate log calls or manual stream registration. Custom facade instances keep companion streams explicit.
 
 ## 2. Network transport
 
@@ -39,7 +39,6 @@ The firmware intentionally has two levels.
 
 ~~~cpp
 ESPSerial.begin();
-ESPSerial.addStream(Serial);
 ESPSerial.setAuthKey(...);
 ESPSerial.waitForConnection(12000);
 ESPSerial.println(...);

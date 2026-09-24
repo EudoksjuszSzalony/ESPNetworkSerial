@@ -100,6 +100,7 @@ jobs:
       - name: Compile firmware examples
         run: |
           arduino-cli compile --fqbn esp32:esp32:esp32 --library . examples/BasicMonitor
+          arduino-cli compile --fqbn esp32:esp32:esp32 --library . examples/WirelessOTAAndMonitor
           arduino-cli compile --fqbn esp32:esp32:esp32 --library . examples/CustomInstance
           arduino-cli compile --fqbn esp32:esp32:esp32 --library . examples/StressEcho
 

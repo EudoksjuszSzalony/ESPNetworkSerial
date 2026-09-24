@@ -11,6 +11,16 @@
 #define ESPNETWORKSERIAL_DEFAULT_PORT 3233
 #endif
 
+// The global ESPSerial facade mirrors Arduino's default Serial automatically.
+// Custom ESPNetworkSerial instances remain explicit and do not claim Serial.
+#ifndef ESPNETWORKSERIAL_GLOBAL_SERIAL_MIRROR
+#define ESPNETWORKSERIAL_GLOBAL_SERIAL_MIRROR 1
+#endif
+
+#ifndef ESPNETWORKSERIAL_GLOBAL_SERIAL_BAUD
+#define ESPNETWORKSERIAL_GLOBAL_SERIAL_BAUD 115200
+#endif
+
 #ifndef ESPNETWORKSERIAL_PROTOCOL_VERSION
 #define ESPNETWORKSERIAL_PROTOCOL_VERSION 1
 #endif
@@ -220,6 +230,7 @@ public:
 private:
   ESPNetworkSerialMux _mux;
   ESPNetworkSerialTCP _network;
+  bool _globalSerialAttached;
 };
 
 extern ESPNetworkSerial ESPSerial;

@@ -11,14 +11,14 @@ Before creating a public tag, open **Actions -> Release -> Run workflow** and ru
 The default dry-run label is:
 
 ~~~text
-0.0.19-dev
+0.0.20-dev
 ~~~
 
 A dry run:
 
 - validates the supplied version label;
 - runs all Go monitor tests and the race detector;
-- compiles BasicMonitor, CustomInstance, and StressEcho against ESP32 Arduino core 3.3.10;
+- compiles BasicMonitor, WirelessOTAAndMonitor, CustomInstance, and StressEcho against ESP32 Arduino core 3.3.10;
 - builds the host monitor for all supported release targets;
 - injects the selected version into `espnetworkserial-monitor --version`;
 - packages each binary with the monitor README, example config, and MIT license;

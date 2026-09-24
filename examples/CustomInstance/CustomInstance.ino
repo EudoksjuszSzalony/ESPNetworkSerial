@@ -1,8 +1,8 @@
 #include <WiFi.h>
 #include <ESPNetworkSerial.h>
 
-// The facade can use any object name. This keeps the same easy API while
-// leaving the built-in global ESPSerial available for sketches that want it.
+// Custom instances stay explicit: unlike the global ESPSerial convenience
+// object, they do not automatically claim or initialize Arduino's Serial.
 ESPNetworkSerial DebugSerial;
 
 void setup() {
@@ -11,9 +11,8 @@ void setup() {
   // Connect Wi-Fi before begin() in a real sketch.
   WiFi.mode(WIFI_STA);
 
-  // Optional companion stream: mirror RX/TX to USB Serial as well.
+  // A custom instance can mirror any companion Stream you choose.
   DebugSerial.addStream(Serial);
-
   DebugSerial.begin();
 
   DebugSerial.println("ESPNetworkSerial custom instance example");
