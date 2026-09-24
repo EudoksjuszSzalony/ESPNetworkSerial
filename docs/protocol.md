@@ -1,6 +1,6 @@
 # ESPNetworkSerial Protocol
 
-> Status: **experimental protocol v1 / not frozen**. Endpoint identification, optional mutual HMAC-SHA256 authentication, and an authenticated AES-256-GCM record layer are implemented.
+> Status: **ESPNS/1 freeze candidate**. Endpoint identification, optional mutual HMAC-SHA256 authentication, and the authenticated AES-256-GCM record layer are implemented and hardware-tested.
 
 ## Separation of concerns
 
@@ -95,13 +95,9 @@ ESPNS/1 aes256-gcm device-to-host nonce-prefix
 
 The two AES keys are 32 bytes each. Each nonce prefix is 4 bytes.
 
-This gives each direction a separate key and nonce space.
-
 ## AES-256-GCM record layer
 
 Authenticated serial traffic is split into records with a maximum plaintext payload of 1024 bytes.
-
-Each record is:
 
 ~~~text
 +----------------+-------------------+----------------------+----------------+
@@ -109,7 +105,7 @@ Each record is:
 +----------------+-------------------+----------------------+----------------+
 ~~~
 
-The 10-byte `length || sequence` header is authenticated as AES-GCM additional authenticated data (AAD).
+The 10-byte `length || sequence` header is authenticated as AES-GCM AAD.
 
 The 96-bit GCM nonce is:
 
@@ -119,45 +115,48 @@ direction_nonce_prefix (4 bytes) || sequence (8 bytes, big endian)
 
 Sequence numbers start at zero independently in each direction and must increase by exactly one record at a time.
 
-A record is rejected if:
-
-- the payload length is zero or exceeds 1024 bytes;
-- the sequence number is not the expected next value;
-- the AES-GCM authentication tag is invalid.
-
-The sequence number is incremented only after successful encryption/decryption of a complete record.
+A record is rejected if the payload length is zero or exceeds 1024 bytes, the sequence is not the expected next value, or the GCM tag is invalid.
 
 TCP segmentation is irrelevant: implementations buffer partial ESPNS headers, ciphertext and tags until a complete record is available.
 
 ## Reconnect semantics
 
-A reconnect is a **new ESPNS session**:
+A reconnect is a **new ESPNS session** with fresh client/server nonces, fresh HKDF-derived keys and nonce prefixes, and sequence numbers reset to zero.
 
-- fresh client nonce;
-- fresh server nonce;
-- fresh HKDF-derived directional keys;
-- fresh nonce prefixes;
-- sequence numbers reset to zero.
+The host monitor may keep the Arduino IDE-side monitor session alive while it creates the new ESPNS session. Secure-record state is never resumed across TCP connections.
 
-The host monitor may keep the Arduino IDE-side monitor session alive while it creates the new ESPNS session.
+## ESPNS/1 compatibility rules
 
-## Errors
+ESPNS uses the integer in `ESPNS/1` as the wire-protocol major version.
 
-The ESP32 may return plaintext handshake errors such as:
+For ESPNS/1:
 
-~~~text
-ESPNS/1 ERR bad_hello
-ESPNS/1 ERR nonce_required
-ESPNS/1 ERR invalid_nonce
-ESPNS/1 ERR bad_auth
-ESPNS/1 ERR auth_failed
-ESPNS/1 ERR auth_internal
-ESPNS/1 ERR secure_internal
-ESPNS/1 ERR line_too_long
-ESPNS/1 ERR timeout
-~~~
+- peers use the exact `ESPNS/1` command prefix;
+- existing command names, required fields, proof strings, HKDF labels, record layout, nonce construction, and sequence semantics are stable;
+- control-line fields are space-separated `name=value` tokens and are order-independent;
+- receivers must ignore unknown optional `name=value` fields on otherwise recognized ESPNS/1 control lines;
+- future ESPNS/1 extensions may add optional fields or new error codes, but may not make a new field mandatory for an existing successful flow;
+- existing field values must not be silently reinterpreted;
+- unknown authentication methods or data modes may be rejected;
+- changes to cryptographic proofs, key derivation, record framing, nonce/sequence rules, or required handshake flow require a new major version such as `ESPNS/2`.
 
-Once `mode=aes256-gcm` is active, malformed, replayed, out-of-order or unauthenticated records cause the connection to be closed instead of attempting to continue on a potentially desynchronized stream.
+There is intentionally no wire-level minor version in this freeze candidate.
+
+## Stable ESPNS/1 handshake error codes
+
+| Code | Meaning |
+| --- | --- |
+| `bad_hello` | First control line is not a valid ESPNS/1 HELLO command. |
+| `nonce_required` | Authentication is enabled but HELLO omitted the client nonce. |
+| `invalid_nonce` | A nonce has the wrong length or invalid hexadecimal. |
+| `bad_auth` | The expected AUTH control line is malformed or replaced by another command. |
+| `auth_failed` | The client proof is missing, malformed, or incorrect. |
+| `auth_internal` | The device could not compute the authentication challenge. |
+| `secure_internal` | The device could not derive secure session material. |
+| `line_too_long` | A handshake line exceeded the implementation limit. |
+| `timeout` | The handshake did not complete before the timeout. |
+
+Future ESPNS/1 implementations may add error codes, but the meanings above remain stable. Once secure mode is active, record-layer failures are fail-closed by dropping the connection rather than sending plaintext errors.
 
 ## Current limits
 
@@ -170,18 +169,6 @@ Once `mode=aes256-gcm` is active, malformed, replayed, out-of-order or unauthent
 - GCM authentication tag: 16 bytes;
 - authentication key: 16..128 bytes.
 
-## Why authenticated mode is framed
-
-Plain serial semantics are preserved at the Arduino API boundary, but an authenticated-encryption algorithm needs explicit message boundaries, nonces and authentication tags.
-
-The record layer is therefore internal. Sketch code still uses ordinary `Print`/`Stream` calls such as:
-
-~~~cpp
-ESPSerial.println("hello");
-ESPSerial.available();
-ESPSerial.read();
-~~~
-
 ## Host authentication configuration
 
 Development builds look for `config.json` next to the monitor executable:
@@ -193,17 +180,17 @@ Development builds look for `config.json` next to the monitor executable:
 }
 ~~~
 
-`monitor/config.json` is ignored by Git.
-
 Environment overrides are available through `ESPNS_AUTH_KEY`, `ESPNS_ALLOW_UNAUTHENTICATED`, and `ESPNS_CONFIG`.
 
-## Still to be specified before v1 is frozen
+## Deliberately deferred beyond the first freeze
+
+These do not need to block ESPNS/1:
 
 - per-device key selection;
-- formal capability registry;
+- richer capability negotiation;
 - ESPNetworkSerial-specific discovery metadata;
-- keepalive behavior;
-- stable protocol error-code registry;
-- compatibility rules for future major/minor wire versions;
-- key provisioning and rotation;
-- record-size/performance tuning.
+- application-level keepalive behavior;
+- key provisioning and rotation workflows;
+- alternative secure modes or tuned record sizes.
+
+Any deferred feature that requires an incompatible wire change belongs in ESPNS/2.

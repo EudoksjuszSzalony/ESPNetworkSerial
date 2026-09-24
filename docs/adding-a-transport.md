@@ -41,7 +41,7 @@ This interface is illustrative, not yet API-stable.
 6. Verify bidirectional Arduino Serial Monitor traffic.
 7. Document platform limitations.
 
-The first reference implementation will be TCP and will define the concrete extension points used by subsequent transports.
+TCP is the current reference implementation and is being used to define the concrete extension points for subsequent transports.
 
 ## Firmware-side rule
 

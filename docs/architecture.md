@@ -14,7 +14,7 @@ Moves bytes between the ESP32 and the host monitor. The initial transport target
 
 ## 3. Host monitor
 
-A standalone program, planned in Go, that speaks Arduino's Pluggable Monitor protocol on the IDE side and the selected ESPNetworkSerial transport on the device side.
+A standalone Go program that speaks Arduino's Pluggable Monitor protocol on the IDE side and ESPNS on the device side.
 
 ## Data flow
 
@@ -56,6 +56,8 @@ The complete facade API then follows that object name (`DebugSerial.begin()`, `D
 
 ### Advanced transport API
 
-`ESPNetworkSerialTCP` and `ESPNetworkSerialMux` remain public building blocks for custom transport composition and experimentation. The facade exposes its built-in TCP backend through `tcp()` as an escape hatch for transport-specific operations.
+`ESPNetworkSerialTCP` and `ESPNetworkSerialMux` remain available as advanced building blocks. The facade exposes its built-in TCP backend through `tcp()` as an escape hatch.
+
+These advanced types are not part of the v0.1 facade-stability promise; their internals may evolve as additional transports are explored. The normal `ESPNetworkSerial` facade is the compatibility boundary for ordinary sketches.
 
 This split keeps the common API transport-agnostic without removing extensibility.

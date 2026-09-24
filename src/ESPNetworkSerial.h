@@ -71,11 +71,16 @@ public:
   int available() override;
   int read() override;
   size_t read(uint8_t *buffer, size_t size);
-  size_t read(uint8_t *buffer, size_t size, Stream *bulkStream);
   int peek() override;
   void flush() override;
 
 private:
+  friend class ESPNetworkSerial;
+
+  // Internal facade fast path. The facade passes its known TCP backend so
+  // encrypted records can be copied in bulk without RTTI.
+  size_t read(uint8_t *buffer, size_t size, Stream *bulkStream);
+
   Stream *_streams[ESPNETWORKSERIAL_MAX_STREAMS];
   size_t _streamCount;
   size_t _nextReadIndex;
@@ -89,23 +94,15 @@ public:
   void end();
   void handle();
 
-  // Optional ESPNS mutual authentication. The key is independent from any
-  // ArduinoOTA password. A configured key requires HMAC-SHA256 authentication.
   bool setAuthKey(const char *key);
   void clearAuthKey();
   bool authenticationEnabled() const;
 
-  // Optional boot-time wait helpers:
-  //   no wait: do not call waitForConnection()
-  //   required: waitForConnection()
-  //   timeout: waitForConnection(12000)
   bool waitForConnection();
   bool waitForConnection(uint32_t timeoutMs);
 
   bool started() const;
   bool connected();
-  // Intentionally close only the active ESPNS client while keeping the
-  // listening server alive. Primarily useful for diagnostics/fault testing.
   void disconnectClient();
   uint16_t port() const;
   IPAddress remoteIP();
@@ -186,20 +183,15 @@ class ESPNetworkSerial : public Stream {
 public:
   explicit ESPNetworkSerial(uint16_t port = ESPNETWORKSERIAL_DEFAULT_PORT);
 
-  // Easy-mode lifecycle. The built-in TCP transport is managed internally.
   void begin();
   void end();
   void handle();
 
-  // Add optional companion streams such as USB Serial. The internal network
-  // transport is always present and is not removed by clearStreams().
   bool addStream(Stream &stream);
   bool removeStream(Stream &stream);
   void clearStreams();
   size_t streamCount() const;
 
-  // Network/security controls are exposed directly on the facade so sketches
-  // do not need to know about ESPNetworkSerialTCP.
   bool setAuthKey(const char *key);
   void clearAuthKey();
   bool authenticationEnabled() const;
@@ -212,7 +204,6 @@ public:
   uint16_t port() const;
   IPAddress remoteIP();
 
-  // Advanced escape hatch for transport-specific work.
   ESPNetworkSerialTCP &tcp();
   const ESPNetworkSerialTCP &tcp() const;
 

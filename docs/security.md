@@ -1,6 +1,6 @@
 # Security
 
-> Status: experimental. Authenticated ESPNS sessions now provide mutual authentication, confidentiality and record integrity using HMAC-SHA256, HKDF-SHA256 and AES-256-GCM. The protocol is still pre-alpha and has not received an external security review.
+> Status: ESPNS/1 freeze-candidate security design. Authenticated sessions provide mutual authentication, confidentiality and record integrity using HMAC-SHA256, HKDF-SHA256 and AES-256-GCM. The design has extensive automated and real-device regression testing but has not received an external security review.
 
 ESPNetworkSerial carries console data and may allow commands to be sent back to the ESP32, so security is part of the transport rather than an application-specific add-on.
 

@@ -206,7 +206,7 @@ The script removes only the block managed by ESPNetworkSerial.
 
 ## Current limitations
 
-- Optional mutual HMAC-SHA256 authentication is available, but the raw serial stream is not encrypted or integrity-protected after the handshake.
+- Authenticated sessions use mutual HMAC-SHA256 authentication, HKDF-SHA256 session derivation, and AES-256-GCM encrypted/integrity-protected records. Unauthenticated `mode=raw` remains plaintext and is intended only for trusted development networks.
 - One network monitor client at a time.
 - Reconnect currently retries the same discovered IP address; DHCP address changes during the reconnect window are not followed yet.
 - The `network` -> monitor binding is installed per ESP32 core version; rerun the installer after a core update.

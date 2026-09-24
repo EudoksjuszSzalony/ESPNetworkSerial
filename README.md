@@ -4,7 +4,7 @@
 
 ESPNetworkSerial aims to make network serial feel like ordinary Arduino Serial: select your ESP32 network port, open Serial Monitor, and communicate bidirectionally over Wi-Fi — while keeping OTA available on the same device.
 
-> **Status:** early development / pre-alpha. Native Arduino IDE monitoring, OTA coexistence, reconnect recovery, ESPNS v1 endpoint identification, mutual HMAC-SHA256 authentication, and AES-256-GCM encrypted serial transport are now implemented. Protocol details are still not frozen.
+> **Status:** pre-release / ESPNS/1 freeze candidate. Native Arduino IDE monitoring, OTA coexistence, reconnect recovery, mutual HMAC-SHA256 authentication, AES-256-GCM encrypted transport, and real-device fault-injection testing are implemented. The project is preparing the v0.1 public API/protocol freeze.
 
 ## Why
 
@@ -209,6 +209,7 @@ ESPNetworkSerial will be submitted to the Arduino Library Manager registry after
 - [Protocol specification](docs/protocol.md)
 - [Security](docs/security.md)
 - [Testing and hardening](docs/testing.md)
+- [Firmware API stability](docs/api-stability.md)
 - [Adding another transport](docs/adding-a-transport.md)
 - [Windows development setup](docs/development-setup.md)
 
@@ -246,6 +247,8 @@ GitHub Wiki can provide the friendly how-to layer, while `docs/` remains the ver
 - [ ] First tagged public release + Arduino Library Manager registration
 - [x] Host monitor Go tests + cross-platform CI build workflow
 - [ ] Signed/tagged release builds
+- [x] ESPNS/1 compatibility rules and stable handshake error registry
+- [x] v0.1 facade/advanced API boundary documented
 - [ ] Protocol and extension-point stabilization
 
 Development testing has been confirmed with Arduino IDE 2.3.10 and ESP32 Arduino core 3.3.10, including OTA upload with an open Wi-Fi Serial Monitor and automatic monitor reconnection after the ESP32 reboots.
