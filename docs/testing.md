@@ -139,7 +139,19 @@ Additional real-device torture runs completed successfully:
 
 These runs exercise two different failure surfaces: long-lived encrypted record sequencing and repeated TCP/HMAC/HKDF/AES-GCM session lifecycle. They are development observations, not guaranteed performance figures.
 
-The stress command fails immediately on connection/authentication failure, write/read failure, incomplete echo, or the first wrong echoed byte.
+By default, the stress command fails immediately on connection/authentication failure, write/read failure, incomplete echo, or the first wrong echoed byte.
+
+### Manual fault-injection / recovery mode
+
+`--stress-recover` changes only the test harness behavior. If an active transfer is broken, the host waits for the ESP32 to become reachable again, requires a completely fresh ESPNS handshake, then restarts the interrupted logical cycle from byte zero. It never resumes an AES-GCM byte stream across sessions.
+
+~~~powershell
+.\\monitor\\espnetworkserial-monitor.exe --stress 192.168.1.128 --stress-bytes 8388608 --stress-cycles 1 --stress-timeout 2m --stress-recover --stress-recover-timeout 45s
+~~~
+
+While this is running, reset the ESP32 or temporarily remove its Wi-Fi connectivity after progress has started. A successful test must report an interruption, a successful fresh handshake, restart the cycle, verify the entire deterministic payload, and finish with at least one recovery.
+
+This mode deliberately treats bytes from the interrupted attempt as uncommitted. That is the safe session boundary for the harness: new handshake nonces, HKDF keys, nonce prefixes and AES-GCM sequence numbers belong to a new stream.
 
 ## Longer-running hardware torture test
 

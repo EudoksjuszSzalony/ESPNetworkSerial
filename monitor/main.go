@@ -18,7 +18,7 @@ import (
 
 const (
 	monitorName       = "ESPNetworkSerialMonitor"
-	monitorVersion    = "0.6.0-dev"
+	monitorVersion    = "0.7.0-dev"
 	protocolVersion   = 1
 	defaultDevicePort = "3233"
 	dialTimeout       = 4 * time.Second
@@ -579,6 +579,8 @@ func main() {
 	stressCycles := flag.Int("stress-cycles", 5, "number of connect/authenticate/echo/disconnect stress cycles")
 	stressTimeout := flag.Duration("stress-timeout", 2*time.Minute, "maximum duration of one stress cycle")
 	stressPause := flag.Duration("stress-pause", 0, "pause between completed stress cycles")
+	stressRecover := flag.Bool("stress-recover", false, "recover after a broken stress session by reconnecting and starting that cycle again")
+	stressRecoverTimeout := flag.Duration("stress-recover-timeout", 30*time.Second, "maximum time to wait for ESP32 recovery when --stress-recover is enabled")
 	flag.Parse()
 
 	if *showVersion {
@@ -606,7 +608,15 @@ func main() {
 	}
 
 	if *stressTarget != "" {
-		if err := stressMode(*stressTarget, auth, *stressBytes, *stressCycles, *stressTimeout, *stressPause); err != nil {
+		options := stressOptions{
+			payloadBytes:   *stressBytes,
+			cycles:         *stressCycles,
+			cycleTimeout:   *stressTimeout,
+			cyclePause:     *stressPause,
+			recover:        *stressRecover,
+			recoverTimeout: *stressRecoverTimeout,
+		}
+		if err := stressModeWithOptions(*stressTarget, auth, options); err != nil {
 			fmt.Fprintln(os.Stderr, "stress error:", err)
 			os.Exit(1)
 		}
