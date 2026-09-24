@@ -1,0 +1,56 @@
+name: Windows Installer CI
+
+on:
+  push:
+    paths:
+      - "installer/windows/**"
+      - "monitor/**"
+      - ".github/workflows/installer-ci.yml"
+  pull_request:
+    paths:
+      - "installer/windows/**"
+      - "monitor/**"
+      - ".github/workflows/installer-ci.yml"
+
+jobs:
+  test-and-build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.x"
+
+      - name: Build Windows monitor payload
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Path "installer\windows\payload" -Force | Out-Null
+          Push-Location monitor
+          go build -trimpath -ldflags="-s -w -X main.monitorVersion=0.0.18-ci" -o "..\installer\windows\payload\espnetworkserial-monitor.exe" .
+          Pop-Location
+          Copy-Item LICENSE "installer\windows\payload\LICENSE"
+          Copy-Item "monitor\README.md" "installer\windows\payload\README.md"
+          Copy-Item "monitor\config.example.json" "installer\windows\payload\config.example.json"
+
+      - name: Test integration scripts
+        shell: powershell
+        run: .\installer\windows\test-integration.ps1
+
+      - name: Install Inno Setup
+        shell: powershell
+        run: choco install innosetup --no-progress -y
+
+      - name: Compile installer
+        shell: powershell
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path -LiteralPath $iscc)) { throw "ISCC.exe not found at $iscc" }
+          & $iscc "/DAppVersion=0.0.18-ci" "installer\windows\ESPNetworkSerial.iss"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: espnetworkserial-installer-ci
+          path: installer/windows/output/espnetworkserial-setup-*-windows-amd64.exe
+          if-no-files-found: error

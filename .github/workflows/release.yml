@@ -6,7 +6,7 @@ on:
       version:
         description: "Dry-run version label (no GitHub Release is created)"
         required: true
-        default: "0.0.17-dev"
+        default: "0.0.18-dev"
         type: string
   push:
     tags:
@@ -166,14 +166,61 @@ jobs:
           path: dist/espnetworkserial-monitor-*
           if-no-files-found: error
 
-  checksums:
+  build-installer:
     needs: [prepare, build-host]
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
-      - name: Download packaged binaries
+      - uses: actions/checkout@v4
+
+      - name: Download Windows monitor package
         uses: actions/download-artifact@v4
         with:
-          pattern: espnetworkserial-monitor-*
+          name: espnetworkserial-monitor-windows-amd64
+          path: dist
+
+      - name: Prepare installer payload
+        shell: powershell
+        run: |
+          $archive = Get-ChildItem -LiteralPath dist -Filter "espnetworkserial-monitor-*.zip" | Select-Object -First 1
+          if (-not $archive) { throw "Windows monitor archive not found" }
+          $payload = "installer\windows\payload"
+          Remove-Item -LiteralPath $payload -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path $payload -Force | Out-Null
+          Expand-Archive -LiteralPath $archive.FullName -DestinationPath $payload -Force
+
+      - name: Test Arduino integration scripts
+        shell: powershell
+        run: .\installer\windows\test-integration.ps1
+
+      - name: Install Inno Setup
+        shell: powershell
+        run: choco install innosetup --no-progress -y
+
+      - name: Compile Windows installer
+        shell: powershell
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path -LiteralPath $iscc)) { throw "ISCC.exe not found at $iscc" }
+          & $iscc "/DAppVersion=$env:VERSION" "installer\windows\ESPNetworkSerial.iss"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: espnetworkserial-installer-windows-amd64
+          path: installer/windows/output/espnetworkserial-setup-*-windows-amd64.exe
+          if-no-files-found: error
+
+  checksums:
+    needs: [prepare, build-host, build-installer]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download packaged release assets
+        uses: actions/download-artifact@v4
+        with:
+          pattern: espnetworkserial-*
           path: release
           merge-multiple: true
 
@@ -181,7 +228,7 @@ jobs:
         shell: bash
         run: |
           cd release
-          sha256sum espnetworkserial-monitor-* > SHA256SUMS.txt
+          sha256sum espnetworkserial-* > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
       - name: Upload complete release bundle

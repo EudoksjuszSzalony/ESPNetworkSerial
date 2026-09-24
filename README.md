@@ -211,6 +211,7 @@ ESPNetworkSerial will be submitted to the Arduino Library Manager registry after
 - [Testing and hardening](docs/testing.md)
 - [Firmware API stability](docs/api-stability.md)
 - [Release process](docs/releases.md)
+- [Windows end-user installer](docs/windows-installer.md)
 - [Adding another transport](docs/adding-a-transport.md)
 - [Windows development setup](docs/development-setup.md)
 
@@ -244,7 +245,8 @@ GitHub Wiki can provide the friendly how-to layer, while `docs/` remains the ver
 - [x] Wi-Fi subsystem-off recovery with ESPNS/ArduinoOTA service restart
 - [x] 8-second application stall survives without ESPNS reconnect
 - [x] TCP-only disconnect recovers through a fresh authenticated session
-- [ ] Windows end-user installer
+- [x] Windows end-user installer build + Arduino core integration tooling
+- [ ] Windows end-user installer end-to-end validation on a clean machine
 - [ ] First tagged public release + Arduino Library Manager registration
 - [x] Host monitor Go tests + cross-platform CI build workflow
 - [x] Automated tagged multi-platform release builds + SHA-256 checksums
