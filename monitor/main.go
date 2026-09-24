@@ -27,7 +27,7 @@ const (
 
 // Overridden by release builds with:
 //   -ldflags "-X main.monitorVersion=<release-version>"
-var monitorVersion = "0.0.20-dev"
+var monitorVersion = "0.0.21-dev"
 
 type response struct {
 	EventType       string           `json:"eventType"`

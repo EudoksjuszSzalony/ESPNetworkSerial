@@ -77,6 +77,8 @@ The uninstaller runs the unregister helper before deleting application files. It
 
 Other `platform.local.txt` and `boards.local.txt` content is preserved.
 
+The uninstaller also removes the generated `integration-status.txt` and local `config.json`. The latter may contain the ESPNS pre-shared authentication key, so uninstall does not intentionally leave that secret behind in the application directory.
+
 ## Signing status
 
 The current pre-release installer is not Authenticode-signed. Windows SmartScreen may therefore warn about an unknown publisher. SHA-256 release checksums verify downloaded file integrity, but checksums are not a substitute for code signing.

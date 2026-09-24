@@ -4,7 +4,7 @@
 #define MyAppExeName "espnetworkserial-monitor.exe"
 
 #ifndef AppVersion
-  #define AppVersion "0.0.20-dev"
+  #define AppVersion "0.0.21-dev"
 #endif
 
 [Setup]
@@ -47,6 +47,14 @@ Name: "{group}\Uninstall ESPNetworkSerial"; Filename: "{uninstallexe}"
 
 [UninstallRun]
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\tools\unregister-arduino.ps1"""; Flags: runhidden waituntilterminated
+
+[UninstallDelete]
+; These files are created or modified after installation, so Inno Setup does
+; not own them automatically. Remove them explicitly to avoid leaving a stale
+; integration report or an ESPNS authentication key behind after uninstall.
+Type: files; Name: "{app}\integration-status.txt"
+Type: files; Name: "{app}\config.json"
+Type: dirifempty; Name: "{app}"
 
 [Code]
 procedure CurStepChanged(CurStep: TSetupStep);

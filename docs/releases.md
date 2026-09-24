@@ -11,7 +11,7 @@ Before creating a public tag, open **Actions -> Release -> Run workflow** and ru
 The default dry-run label is:
 
 ~~~text
-0.0.20-dev
+0.0.21-dev
 ~~~
 
 A dry run:
