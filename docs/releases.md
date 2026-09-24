@@ -11,7 +11,7 @@ Before creating a public tag, open **Actions -> Release -> Run workflow** and ru
 The default dry-run label is:
 
 ~~~text
-0.0.18-dev
+0.0.19-dev
 ~~~
 
 A dry run:
@@ -28,6 +28,9 @@ A dry run:
 - does **not** create a GitHub Release.
 
 ## Public tagged release
+
+Before tagging `v0.1.0`, complete the repository checklist in [v0.1-release-checklist.md](v0.1-release-checklist.md).
+
 
 For a real release, first set `library.properties` to the desired semantic version, for example:
 

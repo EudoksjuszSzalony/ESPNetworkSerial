@@ -8,12 +8,12 @@ The Windows installer removes the development requirement to clone the repositor
 
 The per-user installer:
 
-- installs \`espnetworkserial-monitor.exe\` under the current user's Local AppData;
+- installs `espnetworkserial-monitor.exe` under the current user's Local AppData;
 - installs the MIT license, monitor README, example host configuration, and Arduino integration helper scripts;
-- scans installed ESP32 Arduino core versions under \`%LOCALAPPDATA%\Arduino15\`;
-- writes only the managed ESPNetworkSerial block in each core's \`platform.local.txt\`;
+- scans installed ESP32 Arduino core versions under `%LOCALAPPDATA%\Arduino15`;
+- writes only the managed ESPNetworkSerial block in each core's `platform.local.txt`;
 - leaves the stock ESP32 ArduinoOTA upload recipe untouched;
-- refuses to overwrite another existing \`pluggable_monitor.pattern.network\` implementation;
+- refuses to overwrite another existing `pluggable_monitor.pattern.network` implementation;
 - creates a Start-menu **Repair Arduino integration** shortcut for newly installed ESP32 core versions;
 - removes only ESPNetworkSerial-managed blocks during uninstall.
 
@@ -27,7 +27,7 @@ The default install path is:
 %LOCALAPPDATA%\Programs\ESPNetworkSerial
 ~~~
 
-The monitor reads optional \`config.json\` from the same directory as the executable. The installer ships \`config.example.json\` but does not invent an authentication key automatically.
+The monitor reads optional `config.json` from the same directory as the executable. The installer ships `config.example.json` but does not invent an authentication key automatically.
 
 To enable authenticated ESPNS, copy the example to:
 
@@ -75,7 +75,7 @@ The uninstaller runs the unregister helper before deleting application files. It
 # ESPNetworkSerial END
 ~~~
 
-Other \`platform.local.txt\` and \`boards.local.txt\` content is preserved.
+Other `platform.local.txt` and `boards.local.txt` content is preserved.
 
 ## Signing status
 
