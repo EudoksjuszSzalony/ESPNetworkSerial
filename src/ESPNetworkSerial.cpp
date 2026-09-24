@@ -550,6 +550,10 @@ bool ESPNetworkSerialTCP::authenticationEnabled() const {
   return _authKeyLength > 0;
 }
 
+void ESPNetworkSerialTCP::disconnectClient() {
+  closeProtocolClient();
+}
+
 void ESPNetworkSerialTCP::resetHandshakeLine() {
   _handshakeLength = 0;
   _handshakeBuffer[0] = '\0';

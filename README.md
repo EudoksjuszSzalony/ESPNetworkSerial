@@ -238,6 +238,7 @@ GitHub Wiki can provide the friendly how-to layer, while `docs/` remains the ver
 - [x] 100 consecutive authenticated-session hardware torture run
 - [x] Physical-reset fault injection with fresh authenticated-session recovery
 - [ ] Live Wi-Fi-loss fault injection with fresh authenticated-session recovery
+- [x] StressEcho SW38 multi-click fault-test selector (stall / Wi-Fi drop / Wi-Fi off / TCP drop / restart)
 - [ ] Windows end-user installer
 - [ ] First tagged public release + Arduino Library Manager registration
 - [x] Host monitor Go tests + cross-platform CI build workflow

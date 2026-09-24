@@ -161,6 +161,26 @@ The same recovery mode can test a live ESP32 whose network path disappears witho
 
 Expected behavior is the same at the protocol boundary: the interrupted encrypted session is discarded, recovery requires a new authenticated handshake, and the logical payload restarts from byte zero. Unlike the reset test, this scenario exercises TCP/Wi-Fi loss while the application and MCU remain alive.
 
+### SW38 hardware fault-test selector
+
+The StressEcho firmware has a deliberate fault-test controller on Feather ESP32 V2 pin 38 (SW38). USB diagnostics use the tag `[FAULT TEST]` so intentional test actions are not confused with real failures.
+
+After the final click is released, wait about 650 ms for the click group to be recognized:
+
+| Clicks | Test | Expected transport behavior |
+| ---: | --- | --- |
+| 1 | `delay(8000)` application stall | Same Wi-Fi/TCP/ESPNS session should normally continue; no recovery expected |
+| 2 | `WiFi.disconnect()` for 8 s | Active session breaks; host recovery establishes a fresh ESPNS session |
+| 3 | `WIFI_OFF` for 8 s | Wi-Fi subsystem is disabled while MCU/application state survives; fresh ESPNS session required |
+| 4 | Close active ESPNS TCP client only | Wi-Fi remains associated; fresh TCP/ESPNS session required |
+| 5 | `ESP.restart()` | Full MCU restart; fresh ESPNS session required |
+
+The Wi-Fi tests are scheduled non-blockingly: the sketch remains alive during the 8-second network outage. Test 1 intentionally does the opposite and blocks the Arduino application task with a real `delay(8000)`, because ordinary user sketches may contain long delays.
+
+For tests 2-5, run the host with `--stress-recover`. For test 1, the same command is useful because an unexpected disconnect will be visible as a recovery instead of being mistaken for a normal pause.
+
+The TCP-only test uses the advanced `ESPNetworkSerialTCP::disconnectClient()` diagnostic control. It closes the active protocol client and clears session cryptographic state while leaving the listening server and Wi-Fi association alive.
+
 ## Longer-running hardware torture test
 
 Before freezing ESPNS v1, run a dedicated hardware soak test rather than relying only on Arduino Serial Monitor output.

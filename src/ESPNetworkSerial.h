@@ -104,6 +104,9 @@ public:
 
   bool started() const;
   bool connected();
+  // Intentionally close only the active ESPNS client while keeping the
+  // listening server alive. Primarily useful for diagnostics/fault testing.
+  void disconnectClient();
   uint16_t port() const;
   IPAddress remoteIP();
 
