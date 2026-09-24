@@ -23,6 +23,7 @@ constexpr uint32_t FAULT_TEST_DURATION_MS = 8000;
 constexpr uint32_t BUTTON_DEBOUNCE_MS = 30;
 constexpr uint32_t MULTICLICK_GAP_MS = 650;
 const char *OTA_HOSTNAME = "espnetworkserial-stress";
+const char *STRESS_ECHO_BUILD_ID = "fault-suite-wifi-off-safe-v2";
 
 enum class FaultTestState : uint8_t {
   Idle,
@@ -239,6 +240,8 @@ void setup() {
   StressSerial.begin();
 
   Serial.println("ESPNetworkSerial StressEcho ready");
+  Serial.print("StressEcho build: ");
+  Serial.println(STRESS_ECHO_BUILD_ID);
   Serial.print("IP: ");
   Serial.println(WiFi.localIP());
   Serial.print("TCP port: ");

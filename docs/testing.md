@@ -163,6 +163,8 @@ Expected behavior is the same at the protocol boundary: the interrupted encrypte
 
 ### SW38 hardware fault-test selector
 
+StressEcho prints a short build identifier on USB at boot. Use it to confirm that the board is actually running the current fault-test sketch after a Git pull; Arduino IDE can keep an older open editor buffer even when the file changes on disk.
+
 The StressEcho firmware has a deliberate fault-test controller on Feather ESP32 V2 pin 38 (SW38). USB diagnostics use the tag `[FAULT TEST]` so intentional test actions are not confused with real failures.
 
 After the final click is released, wait about 650 ms for the click group to be recognized:
