@@ -71,6 +71,20 @@ jobs:
         working-directory: monitor
         run: go test -race ./...
 
+  library-lint:
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Arduino Library Manager submission lint
+        uses: arduino/arduino-lint-action@v3
+        with:
+          project-type: library
+          library-manager: submit
+          compliance: strict
+          verbose: true
+
   firmware-tests:
     needs: prepare
     runs-on: ubuntu-latest
@@ -90,7 +104,7 @@ jobs:
           arduino-cli compile --fqbn esp32:esp32:esp32 --library . examples/StressEcho
 
   build-host:
-    needs: [prepare, host-tests, firmware-tests]
+    needs: [prepare, host-tests, firmware-tests, library-lint]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

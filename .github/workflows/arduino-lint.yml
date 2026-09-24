@@ -1,0 +1,25 @@
+name: Arduino Library Lint
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "23 5 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Arduino Library Manager submission lint
+        uses: arduino/arduino-lint-action@v3
+        with:
+          project-type: library
+          library-manager: submit
+          compliance: strict
+          verbose: true
