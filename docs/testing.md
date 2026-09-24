@@ -153,6 +153,14 @@ While this is running, reset the ESP32 or temporarily remove its Wi-Fi connectiv
 
 This mode deliberately treats bytes from the interrupted attempt as uncommitted. That is the safe session boundary for the harness: new handshake nonces, HKDF keys, nonce prefixes and AES-GCM sequence numbers belong to a new stream.
 
+Real-device reset fault injection has been verified: an authenticated transfer was interrupted by a physical ESP32 reset, the host detected the broken session, a fresh authenticated ESPNS session was established after reboot, and the logical cycle restarted and completed with byte-for-byte verification.
+
+#### Wi-Fi-loss fault injection
+
+The same recovery mode can test a live ESP32 whose network path disappears without resetting the MCU. Start the 8 MiB recovery profile above, then temporarily disable the board's Wi-Fi path after transfer progress begins (for example by disabling the AP/SSID used by the board or otherwise isolating that client), keep it unavailable for several seconds, then restore it before `--stress-recover-timeout` expires.
+
+Expected behavior is the same at the protocol boundary: the interrupted encrypted session is discarded, recovery requires a new authenticated handshake, and the logical payload restarts from byte zero. Unlike the reset test, this scenario exercises TCP/Wi-Fi loss while the application and MCU remain alive.
+
 ## Longer-running hardware torture test
 
 Before freezing ESPNS v1, run a dedicated hardware soak test rather than relying only on Arduino Serial Monitor output.
