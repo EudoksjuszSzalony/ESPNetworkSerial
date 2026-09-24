@@ -61,6 +61,7 @@ some.legacy.setting=1
     Assert-True (-not ($conflictText -match [regex]::Escape("# ESPNetworkSerial BEGIN"))) "conflicting core must not receive ESPNetworkSerial block"
 
     Write-Host "Windows integration script tests PASS"
+    exit 0
 }
 finally {
     Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
