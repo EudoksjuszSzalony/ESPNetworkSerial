@@ -132,6 +132,13 @@ An Adafruit Feather ESP32 V2 running authenticated `StressEcho` completed the de
 
 The bulk-read firmware path consumes a verified plaintext record in one buffer copy instead of repeatedly polling the network for each byte.
 
+Additional real-device torture runs completed successfully:
+
+- one authenticated 64 MiB echo cycle (128 MiB aggregate application traffic) at about 1.84 Mbit/s aggregate;
+- 100 consecutive authenticated 64 KiB echo sessions (12.50 MiB aggregate application traffic) at about 1.62 Mbit/s aggregate.
+
+These runs exercise two different failure surfaces: long-lived encrypted record sequencing and repeated TCP/HMAC/HKDF/AES-GCM session lifecycle. They are development observations, not guaranteed performance figures.
+
 The stress command fails immediately on connection/authentication failure, write/read failure, incomplete echo, or the first wrong echoed byte.
 
 ## Longer-running hardware torture test

@@ -234,6 +234,8 @@ GitHub Wiki can provide the friendly how-to layer, while `docs/` remains the ver
 - [x] Real-device binary stress harness (`StressEcho` + `--stress`)
 - [x] Authenticated 5 × 1 MiB real-device stress run with byte-for-byte verification
 - [x] Non-blocking bulk-read path for encrypted records
+- [x] 64 MiB single-session encrypted hardware torture run
+- [x] 100 consecutive authenticated-session hardware torture run
 - [ ] Windows end-user installer
 - [ ] First tagged public release + Arduino Library Manager registration
 - [x] Host monitor Go tests + cross-platform CI build workflow
