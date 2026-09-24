@@ -149,7 +149,7 @@ By default, the stress command fails immediately on connection/authentication fa
 .\\monitor\\espnetworkserial-monitor.exe --stress 192.168.1.128 --stress-bytes 8388608 --stress-cycles 1 --stress-timeout 2m --stress-recover --stress-recover-timeout 45s
 ~~~
 
-While this is running, reset the ESP32 or temporarily remove its Wi-Fi connectivity after progress has started. A successful test must report an interruption, a successful fresh handshake, restart the cycle, verify the entire deterministic payload, and finish with at least one recovery.
+While this is running, reset the ESP32 or temporarily remove its Wi-Fi connectivity after progress has started. A successful test must report an interruption, a successful fresh handshake, restart the cycle, verify the entire deterministic payload, and finish with at least one recovery. The recovery handshake connection is reused directly for the retry rather than being closed and immediately replaced by a second connection.
 
 This mode deliberately treats bytes from the interrupted attempt as uncommitted. That is the safe session boundary for the harness: new handshake nonces, HKDF keys, nonce prefixes and AES-GCM sequence numbers belong to a new stream.
 
@@ -176,6 +176,10 @@ After the final click is released, wait about 650 ms for the click group to be r
 | 5 | Close active ESPNS TCP client only | Wi-Fi remains associated; fresh TCP/ESPNS session required |
 
 The Wi-Fi tests are scheduled non-blockingly: the sketch remains alive during the 8-second network outage. Test 4 intentionally does the opposite and blocks the Arduino application task with a real `delay(8000)`, because ordinary user sketches may contain long delays.
+
+Hardware observation: the 8-second application-delay test paused echo progress and then continued the same transfer normally without requiring a reconnect. This is the expected result and confirms that an ordinary long Arduino `delay()` does not by itself invalidate the ESPNS session.
+
+On Feather ESP32 V2, SW38 is GPIO38 (input-only) with an on-board pull-up, so StressEcho configures it as plain `INPUT`. The WIFI_OFF test explicitly suspends ESPNS and ArduinoOTA before disabling the Wi-Fi subsystem, then restarts both services after the station reconnects. This avoids calling network-service handlers against a deliberately torn-down Wi-Fi stack.
 
 For tests 1-3 and 5, run the host with `--stress-recover`. For test 4, the same command is useful because an unexpected disconnect will be visible as a recovery instead of being mistaken for a normal pause.
 

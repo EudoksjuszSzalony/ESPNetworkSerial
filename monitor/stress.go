@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"net"
 	"os"
 	"time"
 )
@@ -44,14 +45,23 @@ func stressModeWithOptions(target string, auth authSettings, options stressOptio
 	for cycle := 1; cycle <= options.cycles; cycle++ {
 		fillStressPayload(payload, cycle)
 		attempt := 1
+		var recoveredConn net.Conn
 		for {
 			clear(received)
-			fmt.Fprintf(os.Stderr, "%s: stress cycle %d/%d attempt %d connecting to %s...\n", monitorName, cycle, options.cycles, attempt, address)
-			conn, err := dialESPNS(address, dialTimeout, auth)
-			if err != nil {
-				if !options.recover { return fmt.Errorf("stress cycle %d connect to %s: %w", cycle, address, err) }
-				if err := waitForStressRecovery(address, auth, options.recoverTimeout); err != nil { return fmt.Errorf("stress cycle %d recovery: %w", cycle, err) }
-				recoveries++; attempt++; continue
+			var conn net.Conn
+			if recoveredConn != nil {
+				conn = recoveredConn
+				recoveredConn = nil
+				fmt.Fprintf(os.Stderr, "%s: stress cycle %d/%d attempt %d using recovered authenticated session...\n", monitorName, cycle, options.cycles, attempt)
+			} else {
+				fmt.Fprintf(os.Stderr, "%s: stress cycle %d/%d attempt %d connecting to %s...\n", monitorName, cycle, options.cycles, attempt, address)
+				conn, err = dialESPNS(address, dialTimeout, auth)
+				if err != nil {
+					if !options.recover { return fmt.Errorf("stress cycle %d connect to %s: %w", cycle, address, err) }
+					recoveredConn, err = waitForStressRecovery(address, auth, options.recoverTimeout)
+					if err != nil { return fmt.Errorf("stress cycle %d recovery: %w", cycle, err) }
+					recoveries++; attempt++; continue
+				}
 			}
 
 			cycleStarted := time.Now()
@@ -83,7 +93,8 @@ func stressModeWithOptions(target string, auth authSettings, options stressOptio
 				_ = conn.Close()
 				if !options.recover { return fmt.Errorf("stress cycle %d %w", cycle, transferErr) }
 				fmt.Fprintf(os.Stderr, "%s: stress cycle %d interrupted (%v); waiting up to %s for a fresh ESPNS session...\n", monitorName, cycle, transferErr, options.recoverTimeout)
-				if err := waitForStressRecovery(address, auth, options.recoverTimeout); err != nil { return fmt.Errorf("stress cycle %d recovery: %w", cycle, err) }
+				recoveredConn, err = waitForStressRecovery(address, auth, options.recoverTimeout)
+				if err != nil { return fmt.Errorf("stress cycle %d recovery: %w", cycle, err) }
 				recoveries++; attempt++; continue
 			}
 
@@ -108,18 +119,19 @@ func stressModeWithOptions(target string, auth authSettings, options stressOptio
 	return nil
 }
 
-func waitForStressRecovery(address string, auth authSettings, timeout time.Duration) error {
+func waitForStressRecovery(address string, auth authSettings, timeout time.Duration) (net.Conn, error) {
 	deadline := time.Now().Add(timeout)
 	for {
 		remaining := time.Until(deadline)
-		if remaining <= 0 { return fmt.Errorf("device did not establish a fresh authenticated session within %s", timeout) }
+		if remaining <= 0 {
+			return nil, fmt.Errorf("device did not establish a fresh authenticated session within %s", timeout)
+		}
 		attemptTimeout := dialTimeout
 		if remaining < attemptTimeout { attemptTimeout = remaining }
 		conn, err := dialESPNS(address, attemptTimeout, auth)
 		if err == nil {
-			_ = conn.Close()
-			fmt.Fprintf(os.Stderr, "%s: device recovered; fresh ESPNS handshake succeeded\n", monitorName)
-			return nil
+			fmt.Fprintf(os.Stderr, "%s: device recovered; fresh ESPNS handshake succeeded and will be used for retry\n", monitorName)
+			return conn, nil
 		}
 		sleepFor := 250 * time.Millisecond
 		if remaining < sleepFor { sleepFor = remaining }

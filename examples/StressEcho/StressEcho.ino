@@ -14,7 +14,11 @@ ESPNetworkSerial StressSerial;
 constexpr bool WIFI_DISABLE_SLEEP = true;
 constexpr size_t ECHO_BUFFER_SIZE = ESPNETWORKSERIAL_SECURE_MAX_RECORD;
 constexpr uint32_t USB_PROGRESS_EVERY_BYTES = 256 * 1024;
+#ifdef BUTTON
+constexpr uint8_t FAULT_TEST_BUTTON_PIN = BUTTON;
+#else
 constexpr uint8_t FAULT_TEST_BUTTON_PIN = 38;
+#endif
 constexpr uint32_t FAULT_TEST_DURATION_MS = 8000;
 constexpr uint32_t BUTTON_DEBOUNCE_MS = 30;
 constexpr uint32_t MULTICLICK_GAP_MS = 650;
@@ -24,6 +28,7 @@ enum class FaultTestState : uint8_t {
   Idle,
   WiFiDisconnected,
   WiFiOff,
+  WiFiOffReconnecting,
 };
 
 FaultTestState faultTestState = FaultTestState::Idle;
@@ -34,6 +39,7 @@ bool buttonLastRawPressed = false;
 uint32_t buttonLastChangeAt = 0;
 uint32_t buttonLastReleaseAt = 0;
 uint8_t pendingClicks = 0;
+bool networkServicesActive = true;
 
 void printFaultTestMenu() {
   Serial.println("[FAULT TEST] SW38 test selector:");
@@ -51,6 +57,28 @@ void requestWiFiReconnect() {
     WiFi.setSleep(false);
   }
   WiFi.begin(ESPNS_WIFI_SSID, ESPNS_WIFI_PASSWORD);
+}
+
+void suspendNetworkServicesForWiFiOff() {
+  if (!networkServicesActive) {
+    return;
+  }
+
+  Serial.println("[FAULT TEST] suspending ESPNS and ArduinoOTA before WIFI_OFF");
+  StressSerial.end();
+  ArduinoOTA.end();
+  networkServicesActive = false;
+}
+
+void resumeNetworkServicesAfterWiFiOff() {
+  if (networkServicesActive) {
+    return;
+  }
+
+  Serial.println("[FAULT TEST] Wi-Fi is back; restarting ESPNS and ArduinoOTA");
+  ArduinoOTA.begin();
+  StressSerial.begin();
+  networkServicesActive = true;
 }
 
 void runFaultTest(uint8_t clicks) {
@@ -76,6 +104,7 @@ void runFaultTest(uint8_t clicks) {
 
     case 3:
       Serial.println("[FAULT TEST] disabling Wi-Fi subsystem for 8 s");
+      suspendNetworkServicesForWiFiOff();
       WiFi.setAutoReconnect(false);
       WiFi.mode(WIFI_OFF);
       faultTestState = FaultTestState::WiFiOff;
@@ -107,17 +136,27 @@ void handleFaultTestRecovery() {
     return;
   }
 
+  if (faultTestState == FaultTestState::WiFiOffReconnecting) {
+    if (WiFi.status() == WL_CONNECTED) {
+      resumeNetworkServicesAfterWiFiOff();
+      faultTestState = FaultTestState::Idle;
+    }
+    return;
+  }
+
   if (static_cast<int32_t>(millis() - faultTestRestoreAt) < 0) {
     return;
   }
 
   if (faultTestState == FaultTestState::WiFiDisconnected) {
     Serial.println("[FAULT TEST] 8 s elapsed; requesting Wi-Fi reconnect");
-  } else {
-    Serial.println("[FAULT TEST] 8 s elapsed; re-enabling Wi-Fi and requesting reconnect");
+    faultTestState = FaultTestState::Idle;
+    requestWiFiReconnect();
+    return;
   }
 
-  faultTestState = FaultTestState::Idle;
+  Serial.println("[FAULT TEST] 8 s elapsed; re-enabling Wi-Fi and requesting reconnect");
+  faultTestState = FaultTestState::WiFiOffReconnecting;
   requestWiFiReconnect();
 }
 
@@ -172,7 +211,9 @@ void setup() {
   Serial.begin(115200);
   delay(200);
 
-  pinMode(FAULT_TEST_BUTTON_PIN, INPUT_PULLUP);
+  // SW38/GPIO38 is input-only on Feather ESP32 V2 and already has an
+  // on-board pull-up. INPUT_PULLUP asks ESP32 for an unsupported internal PU.
+  pinMode(FAULT_TEST_BUTTON_PIN, INPUT);
 
   requestWiFiReconnect();
 
@@ -214,11 +255,18 @@ void loop() {
   handleFaultTestRecovery();
   reportWiFiStateChanges();
 
-  ArduinoOTA.handle();
-  StressSerial.handle();
+  if (networkServicesActive) {
+    ArduinoOTA.handle();
+    StressSerial.handle();
+  }
 
   static uint64_t totalEchoed = 0;
   static uint64_t nextUsbProgress = USB_PROGRESS_EVERY_BYTES;
+
+  if (!networkServicesActive) {
+    delay(1);
+    return;
+  }
 
   uint8_t buffer[ECHO_BUFFER_SIZE];
   const size_t count = StressSerial.read(buffer, sizeof(buffer));
