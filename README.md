@@ -210,6 +210,7 @@ ESPNetworkSerial will be submitted to the Arduino Library Manager registry after
 - [Security](docs/security.md)
 - [Testing and hardening](docs/testing.md)
 - [Firmware API stability](docs/api-stability.md)
+- [Release process](docs/releases.md)
 - [Adding another transport](docs/adding-a-transport.md)
 - [Windows development setup](docs/development-setup.md)
 
@@ -246,7 +247,8 @@ GitHub Wiki can provide the friendly how-to layer, while `docs/` remains the ver
 - [ ] Windows end-user installer
 - [ ] First tagged public release + Arduino Library Manager registration
 - [x] Host monitor Go tests + cross-platform CI build workflow
-- [ ] Signed/tagged release builds
+- [x] Automated tagged multi-platform release builds + SHA-256 checksums
+- [ ] Windows/macOS code signing and notarization
 - [x] ESPNS/1 compatibility rules and stable handshake error registry
 - [x] v0.1 facade/advanced API boundary documented
 - [ ] Protocol and extension-point stabilization

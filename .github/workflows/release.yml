@@ -1,0 +1,212 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Dry-run version label (no GitHub Release is created)"
+        required: true
+        default: "0.0.17-dev"
+        type: string
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tagged: ${{ steps.version.outputs.tagged }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve release version
+        id: version
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+            TAGGED=true
+          else
+            VERSION="${{ inputs.version }}"
+            TAGGED=false
+          fi
+
+          if [[ ! "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid release version: ${VERSION}" >&2
+            exit 1
+          fi
+
+          if [[ "${TAGGED}" == "true" ]]; then
+            LIB_VERSION="$(sed -n 's/^version=//p' library.properties | tr -d '\r')"
+            if [[ "${LIB_VERSION}" != "${VERSION}" ]]; then
+              echo "Tag version ${VERSION} does not match library.properties version ${LIB_VERSION}" >&2
+              exit 1
+            fi
+          fi
+
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "tagged=${TAGGED}" >> "${GITHUB_OUTPUT}"
+          echo "Release version: ${VERSION}"
+          echo "Tagged release: ${TAGGED}"
+
+  host-tests:
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.x"
+
+      - name: Go tests
+        working-directory: monitor
+        run: go test ./...
+
+      - name: Go race detector
+        working-directory: monitor
+        run: go test -race ./...
+
+  firmware-tests:
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: arduino/setup-arduino-cli@v2
+
+      - name: Install ESP32 core 3.3.10
+        run: |
+          arduino-cli core update-index --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core install esp32:esp32@3.3.10 --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+
+      - name: Compile firmware examples
+        run: |
+          arduino-cli compile --fqbn esp32:esp32:esp32 --library . examples/BasicMonitor
+          arduino-cli compile --fqbn esp32:esp32:esp32 --library . examples/CustomInstance
+          arduino-cli compile --fqbn esp32:esp32:esp32 --library . examples/StressEcho
+
+  build-host:
+    needs: [prepare, host-tests, firmware-tests]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: windows
+            goarch: amd64
+            platform: windows-amd64
+            binary: espnetworkserial-monitor.exe
+            archive_ext: zip
+          - goos: linux
+            goarch: amd64
+            platform: linux-amd64
+            binary: espnetworkserial-monitor
+            archive_ext: tar.gz
+          - goos: linux
+            goarch: arm64
+            platform: linux-arm64
+            binary: espnetworkserial-monitor
+            archive_ext: tar.gz
+          - goos: darwin
+            goarch: amd64
+            platform: macos-amd64
+            binary: espnetworkserial-monitor
+            archive_ext: tar.gz
+          - goos: darwin
+            goarch: arm64
+            platform: macos-arm64
+            binary: espnetworkserial-monitor
+            archive_ext: tar.gz
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.x"
+
+      - name: Build host monitor
+        shell: bash
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "0"
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          mkdir -p dist/package
+          (
+            cd monitor
+            go build -trimpath -ldflags="-s -w -X main.monitorVersion=${VERSION}" -o "../dist/package/${{ matrix.binary }}" .
+          )
+          cp LICENSE dist/package/LICENSE
+          cp monitor/README.md dist/package/README.md
+          cp monitor/config.example.json dist/package/config.example.json
+
+      - name: Package host monitor
+        shell: bash
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          PLATFORM: ${{ matrix.platform }}
+          ARCHIVE_EXT: ${{ matrix.archive_ext }}
+        run: |
+          ARCHIVE="espnetworkserial-monitor-${VERSION}-${PLATFORM}.${ARCHIVE_EXT}"
+          if [[ "${ARCHIVE_EXT}" == "zip" ]]; then
+            (cd dist/package && zip -9 "../${ARCHIVE}" *)
+          else
+            tar -C dist/package -czf "dist/${ARCHIVE}" .
+          fi
+          echo "Created dist/${ARCHIVE}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: espnetworkserial-monitor-${{ matrix.platform }}
+          path: dist/espnetworkserial-monitor-*
+          if-no-files-found: error
+
+  checksums:
+    needs: [prepare, build-host]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download packaged binaries
+        uses: actions/download-artifact@v4
+        with:
+          pattern: espnetworkserial-monitor-*
+          path: release
+          merge-multiple: true
+
+      - name: Create SHA-256 checksums
+        shell: bash
+        run: |
+          cd release
+          sha256sum espnetworkserial-monitor-* > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Upload complete release bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: ESPNetworkSerial-${{ needs.prepare.outputs.version }}-release-assets
+          path: release/*
+          if-no-files-found: error
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [prepare, checksums]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download release assets
+        uses: actions/download-artifact@v4
+        with:
+          name: ESPNetworkSerial-${{ needs.prepare.outputs.version }}-release-assets
+          path: release
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ESPNetworkSerial v${{ needs.prepare.outputs.version }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            release/*

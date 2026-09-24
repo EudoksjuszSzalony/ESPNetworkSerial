@@ -18,13 +18,16 @@ import (
 
 const (
 	monitorName       = "ESPNetworkSerialMonitor"
-	monitorVersion    = "0.7.2-dev"
 	protocolVersion   = 1
 	defaultDevicePort = "3233"
 	dialTimeout       = 4 * time.Second
 	reconnectGrace    = 15 * time.Second
 	reconnectInterval = 250 * time.Millisecond
 )
+
+// Overridden by release builds with:
+//   -ldflags "-X main.monitorVersion=<release-version>"
+var monitorVersion = "0.0.17-dev"
 
 type response struct {
 	EventType       string           `json:"eventType"`
