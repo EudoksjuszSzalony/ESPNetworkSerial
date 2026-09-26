@@ -147,7 +147,7 @@ if [ "$CORE_COUNT" -eq 0 ]; then
   espns_warn "No ESP32 Arduino core versions found under:"
   espns_info "$CORE_ROOT"
   espns_info "Install the ESP32 core, then run:"
-  espns_info ""$APP_DIR/install.sh" --repair"
+  espns_info "\"$APP_DIR/install.sh\" --repair"
 else
   espns_ok "Found $CORE_COUNT ESP32 core version(s)"
 fi
