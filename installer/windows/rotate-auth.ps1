@@ -4,6 +4,7 @@ param(
     [string]$MonitorPath,
     [Parameter(Mandatory = $true)]
     [string]$RegisterScriptPath,
+    [string]$ArduinoDataRoot = "",
     [switch]$Force
 )
 
@@ -57,7 +58,18 @@ try {
 
     Write-Host ""
     Write-Host "Updating Arduino ESP32 core integration..."
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $RegisterScriptPath -MonitorPath $MonitorPath -ConfigPath $configPath
+    $registerArgs = @(
+        "-NoProfile",
+        "-ExecutionPolicy", "Bypass",
+        "-File", $RegisterScriptPath,
+        "-MonitorPath", $MonitorPath,
+        "-ConfigPath", $configPath
+    )
+    if (-not [string]::IsNullOrWhiteSpace($ArduinoDataRoot)) {
+        $registerArgs += @("-ArduinoDataRoot", $ArduinoDataRoot)
+    }
+
+    & powershell.exe @registerArgs
     $registerExit = $LASTEXITCODE
     if ($registerExit -ne 0 -and $registerExit -ne 2) {
         throw "Arduino integration update failed with exit code $registerExit."
