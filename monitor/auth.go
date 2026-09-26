@@ -313,7 +313,9 @@ func writeManagedFirmwareConfig(path string, settings authSettings) (bool, error
 		"// Generated from the local host config by ESPNetworkSerial Setup.",
 		"// This file contains a secret. Do not publish or commit it.",
 		"",
+		"#ifndef ESPNS_DEFAULT_AUTH_KEY",
 		"#define ESPNS_DEFAULT_AUTH_KEY " + quoteCStringBytes(settings.key),
+		"#endif",
 		"",
 	}, "\n")
 
