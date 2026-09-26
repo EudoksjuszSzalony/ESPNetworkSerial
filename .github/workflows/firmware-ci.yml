@@ -32,6 +32,21 @@ jobs:
         run: |
           arduino-cli compile             --fqbn esp32:esp32:esp32             --library .             examples/BasicMonitor
 
+      - name: Compile with installer-provisioned default auth config
+        run: |
+          CONFIG="$HOME/.arduino15/packages/esp32/hardware/esp32/3.3.10/cores/esp32/ESPNetworkSerialConfig.h"
+          cat > "$CONFIG" <<'EOF'
+          #pragma once
+          // ESPNetworkSerial installer-managed configuration.
+          #define ESPNS_DEFAULT_AUTH_KEY "0123456789abcdef0123456789abcdef"
+          EOF
+          arduino-cli compile \
+            --fqbn esp32:esp32:esp32 \
+            --library . \
+            --build-path /tmp/espns-default-auth-build \
+            examples/BasicMonitor
+          rm -f "$CONFIG"
+
       - name: Compile WirelessOTAAndMonitor
         run: |
           arduino-cli compile             --fqbn esp32:esp32:esp32             --library .             examples/WirelessOTAAndMonitor

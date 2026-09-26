@@ -21,15 +21,16 @@ void setup() {
     delay(250);
   }
 
-#ifdef ESPNS_AUTH_KEY
-  ESPSerial.setAuthKey(ESPNS_AUTH_KEY);
-#endif
-
+  // ESPNetworkSerial.h automatically applies, in priority order:
+  //   1) a key set programmatically before begin();
+  //   2) ESPNS_AUTH_KEY from this sketch;
+  //   3) ESPNS_DEFAULT_AUTH_KEY installed by ESPNetworkSerial Setup.
   ESPSerial.begin();
 
-#ifdef ESPNS_AUTH_KEY
+#if defined(ESPNS_AUTH_KEY) || \
+    (defined(ESPNS_DEFAULT_AUTH_KEY) && !defined(ESPNS_DISABLE_DEFAULT_AUTH_KEY))
   if (!ESPSerial.authenticationEnabled()) {
-    ESPSerial.println("FATAL: ESPNS_AUTH_KEY must be 16..128 bytes.");
+    ESPSerial.println("FATAL: configured ESPNS auth key must be 16..128 bytes.");
     while (true) {
       delay(1000);
     }

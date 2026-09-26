@@ -3,7 +3,8 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$MonitorPath,
     [string]$ArduinoDataRoot = $(if ($env:LOCALAPPDATA) { Join-Path $env:LOCALAPPDATA "Arduino15" } else { "" }),
-    [string]$StatusPath = ""
+    [string]$StatusPath = "",
+    [string]$ConfigPath = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -40,6 +41,30 @@ function Write-Status {
     [System.IO.File]::WriteAllLines($StatusPath, $Lines, $utf8NoBom)
 }
 
+function Invoke-ESPNSMonitor {
+    param([string[]]$Arguments)
+
+    $hadConfig = Test-Path Env:ESPNS_CONFIG
+    $previousConfig = $env:ESPNS_CONFIG
+    try {
+        $env:ESPNS_CONFIG = $ConfigPath
+        $output = @(& $MonitorPath @Arguments 2>&1)
+        $exitCode = $LASTEXITCODE
+        if ($exitCode -ne 0) {
+            $details = ($output | ForEach-Object { "$_" }) -join [Environment]::NewLine
+            throw ("ESPNetworkSerial monitor command failed with exit code " + $exitCode + [Environment]::NewLine + $details)
+        }
+        return @($output | ForEach-Object { "$_" })
+    }
+    finally {
+        if ($hadConfig) {
+            $env:ESPNS_CONFIG = $previousConfig
+        } else {
+            Remove-Item Env:ESPNS_CONFIG -ErrorAction SilentlyContinue
+        }
+    }
+}
+
 $status = New-Object System.Collections.Generic.List[string]
 $configured = New-Object System.Collections.Generic.List[string]
 $conflicts = New-Object System.Collections.Generic.List[string]
@@ -57,11 +82,21 @@ try {
     if ([string]::IsNullOrWhiteSpace($StatusPath)) {
         $StatusPath = Join-Path (Split-Path -Parent $MonitorPath) "integration-status.txt"
     }
+    if ([string]::IsNullOrWhiteSpace($ConfigPath)) {
+        $ConfigPath = Join-Path (Split-Path -Parent $MonitorPath) "config.json"
+    }
+    $ConfigPath = [System.IO.Path]::GetFullPath($ConfigPath)
 
     $status.Add("ESPNetworkSerial Arduino integration")
     $status.Add("Monitor: $MonitorPath")
+    $status.Add("Host config: $ConfigPath")
     $status.Add("Arduino data root: $ArduinoDataRoot")
     $status.Add("Timestamp: $([DateTime]::Now.ToString('s'))")
+    $status.Add("")
+
+    $authOutput = @(Invoke-ESPNSMonitor -Arguments @("--provision-auth"))
+    $status.Add("Authentication provisioning:")
+    foreach ($line in $authOutput) { $status.Add("  $line") }
     $status.Add("")
 
     $coreRoot = Join-Path $ArduinoDataRoot "packages\esp32\hardware\esp32"
@@ -83,6 +118,15 @@ try {
     $recipePath = $MonitorPath.Replace('\', '/')
 
     foreach ($version in $versions) {
+        $firmwareCoreDir = Join-Path $version.FullName "cores\esp32"
+        if (Test-Path -LiteralPath $firmwareCoreDir -PathType Container) {
+            $firmwareConfigPath = Join-Path $firmwareCoreDir "ESPNetworkSerialConfig.h"
+            $firmwareOutput = @(Invoke-ESPNSMonitor -Arguments @("--write-firmware-config", $firmwareConfigPath))
+            foreach ($line in $firmwareOutput) { $status.Add("$($version.Name): $line") }
+        } else {
+            $status.Add("$($version.Name): WARNING: cores\esp32 directory not found; firmware default auth config was not installed.")
+        }
+
         $platformLocalPath = Join-Path $version.FullName "platform.local.txt"
         $platformContent = ""
         if (Test-Path -LiteralPath $platformLocalPath -PathType Leaf) {
@@ -116,6 +160,7 @@ try {
         $configured.Add($version.Name)
     }
 
+    $status.Add("")
     if ($configured.Count -gt 0) {
         $status.Add("Configured ESP32 core versions:")
         foreach ($item in $configured) { $status.Add("  - $item") }
@@ -123,7 +168,7 @@ try {
     }
 
     if ($conflicts.Count -gt 0) {
-        $status.Add("Skipped because another network pluggable monitor is already configured:")
+        $status.Add("Skipped network-monitor integration because another implementation is already configured:")
         foreach ($item in $conflicts) { $status.Add("  - $item") }
         $status.Add("")
         $status.Add("ESPNetworkSerial did not overwrite those existing monitor recipes.")
@@ -138,6 +183,7 @@ try {
     Write-Status $status
 
     Write-Host "ESPNetworkSerial Arduino integration configured."
+    Write-Host "Authentication: provisioned/reused from $ConfigPath"
     Write-Host "Status: $StatusPath"
     exit 0
 }

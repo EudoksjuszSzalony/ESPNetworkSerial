@@ -212,6 +212,22 @@ ESPNetworkSerial::ESPNetworkSerial(uint16_t port)
 }
 
 void ESPNetworkSerial::begin() {
+#if defined(ESPNS_AUTH_KEY)
+  // A sketch-defined key is the explicit compile-time override.
+  // A programmatic setAuthKey() call made before begin() has even higher
+  // priority and is therefore never overwritten here.
+  if (!_network.authenticationEnabled()) {
+    _network.setAuthKey(ESPNS_AUTH_KEY);
+  }
+#elif defined(ESPNS_DEFAULT_AUTH_KEY) && !defined(ESPNS_DISABLE_DEFAULT_AUTH_KEY)
+  // ESPNetworkSerial Setup may install a machine-local default key into the
+  // ESP32 core include path. Sketches can override it with ESPNS_AUTH_KEY or
+  // opt out with ESPNS_DISABLE_DEFAULT_AUTH_KEY.
+  if (!_network.authenticationEnabled()) {
+    _network.setAuthKey(ESPNS_DEFAULT_AUTH_KEY);
+  }
+#endif
+
 #if ESPNETWORKSERIAL_GLOBAL_SERIAL_MIRROR
   // The built-in ESPSerial object is the zero-boilerplate path: initialize
   // Arduino's default Serial and mirror it automatically. Custom instances

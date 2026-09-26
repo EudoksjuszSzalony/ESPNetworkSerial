@@ -3,6 +3,10 @@
 #include <Arduino.h>
 #include <WiFi.h>
 
+#if __has_include(<ESPNetworkSerialConfig.h>)
+#include <ESPNetworkSerialConfig.h>
+#endif
+
 #ifndef ESPNETWORKSERIAL_MAX_STREAMS
 #define ESPNETWORKSERIAL_MAX_STREAMS 4
 #endif

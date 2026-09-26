@@ -8,6 +8,7 @@ $platformBeginMarker = "# ESPNetworkSerial BEGIN"
 $platformEndMarker = "# ESPNetworkSerial END"
 $legacyBoardsBeginMarker = "# ESPNetworkSerial PROMPTLESS OTA BEGIN"
 $legacyBoardsEndMarker = "# ESPNetworkSerial PROMPTLESS OTA END"
+$managedFirmwareConfigMarker = "// ESPNetworkSerial installer-managed configuration"
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 
 function Remove-ManagedBlock {
@@ -30,6 +31,15 @@ function Remove-ManagedFileBlock {
     }
 }
 
+function Remove-ManagedFirmwareConfig {
+    param([string]$Path)
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return }
+    $content = [System.IO.File]::ReadAllText($Path)
+    if ($content.Contains($managedFirmwareConfigMarker)) {
+        Remove-Item -LiteralPath $Path
+    }
+}
+
 if ([string]::IsNullOrWhiteSpace($ArduinoDataRoot)) { exit 0 }
 
 $coreRoot = Join-Path ([System.IO.Path]::GetFullPath($ArduinoDataRoot)) "packages\esp32\hardware\esp32"
@@ -39,6 +49,7 @@ $versions = @(Get-ChildItem -LiteralPath $coreRoot -Directory | Sort-Object Name
 foreach ($version in $versions) {
     Remove-ManagedFileBlock -Path (Join-Path $version.FullName "platform.local.txt") -BeginMarker $platformBeginMarker -EndMarker $platformEndMarker
     Remove-ManagedFileBlock -Path (Join-Path $version.FullName "boards.local.txt") -BeginMarker $legacyBoardsBeginMarker -EndMarker $legacyBoardsEndMarker
+    Remove-ManagedFirmwareConfig -Path (Join-Path $version.FullName "cores\esp32\ESPNetworkSerialConfig.h")
 }
 
 Write-Host "ESPNetworkSerial Arduino integration removed."

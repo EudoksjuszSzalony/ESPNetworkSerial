@@ -6,7 +6,7 @@ on:
       version:
         description: "Dry-run version label (no GitHub Release is created)"
         required: true
-        default: "0.0.21-dev"
+        default: "0.1.1-dev"
         type: string
   push:
     tags:
@@ -103,6 +103,21 @@ jobs:
           arduino-cli compile --fqbn esp32:esp32:esp32 --library . examples/WirelessOTAAndMonitor
           arduino-cli compile --fqbn esp32:esp32:esp32 --library . examples/CustomInstance
           arduino-cli compile --fqbn esp32:esp32:esp32 --library . examples/StressEcho
+
+      - name: Compile with installer-provisioned default auth config
+        run: |
+          CONFIG="$HOME/.arduino15/packages/esp32/hardware/esp32/3.3.10/cores/esp32/ESPNetworkSerialConfig.h"
+          cat > "$CONFIG" <<'EOF'
+          #pragma once
+          // ESPNetworkSerial installer-managed configuration.
+          #define ESPNS_DEFAULT_AUTH_KEY "0123456789abcdef0123456789abcdef"
+          EOF
+          arduino-cli compile \
+            --fqbn esp32:esp32:esp32 \
+            --library . \
+            --build-path /tmp/espns-default-auth-build \
+            examples/BasicMonitor
+          rm -f "$CONFIG"
 
   build-host:
     needs: [prepare, host-tests, firmware-tests, library-lint]
@@ -228,8 +243,60 @@ jobs:
           path: installer/windows/output/espnetworkserial-setup-*-windows-amd64.exe
           if-no-files-found: error
 
+  build-unix-setup:
+    needs: [prepare, build-host]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - linux-amd64
+          - linux-arm64
+          - macos-amd64
+          - macos-arm64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download packaged host monitor
+        uses: actions/download-artifact@v4
+        with:
+          name: espnetworkserial-monitor-${{ matrix.platform }}
+          path: dist
+
+      - name: Build terminal setup package
+        shell: bash
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          ARCHIVE="$(find dist -maxdepth 1 -type f -name 'espnetworkserial-monitor-*.tar.gz' -print -quit)"
+          if [[ -z "$ARCHIVE" ]]; then
+            echo "Host monitor archive not found" >&2
+            exit 1
+          fi
+
+          rm -rf setup
+          mkdir -p setup
+          tar -xzf "$ARCHIVE" -C setup
+
+          cp installer/unix/install.sh setup/install.sh
+          cp installer/unix/uninstall.sh setup/uninstall.sh
+          cp installer/unix/common.sh setup/common.sh
+          chmod +x setup/install.sh setup/uninstall.sh setup/espnetworkserial-monitor
+
+          SETUP_ARCHIVE="espnetworkserial-setup-${VERSION}-${PLATFORM}.tar.gz"
+          tar -C setup -czf "dist/${SETUP_ARCHIVE}" .
+          echo "Created dist/${SETUP_ARCHIVE}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: espnetworkserial-setup-${{ matrix.platform }}
+          path: dist/espnetworkserial-setup-*
+          if-no-files-found: error
+
   checksums:
-    needs: [prepare, build-host, build-installer]
+    needs: [prepare, build-host, build-installer, build-unix-setup]
     runs-on: ubuntu-latest
     steps:
       - name: Download packaged release assets

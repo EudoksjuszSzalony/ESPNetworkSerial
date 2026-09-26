@@ -1,0 +1,40 @@
+name: Unix Installer CI
+
+on:
+  push:
+    paths:
+      - "installer/unix/**"
+      - "monitor/**"
+      - ".github/workflows/unix-installer-ci.yml"
+  pull_request:
+    paths:
+      - "installer/unix/**"
+      - "monitor/**"
+      - ".github/workflows/unix-installer-ci.yml"
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+    runs-on: ${{ matrix.os }
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.x"
+
+      - name: Build native monitor fixture
+        shell: bash
+        run: |
+          (cd monitor && go build -trimpath -ldflags="-s -w -X main.monitorVersion=0.1.1-ci" -o ../installer/unix/espnetworkserial-monitor .)
+          chmod +x installer/unix/espnetworkserial-monitor
+
+      - name: Test terminal installer, auth provisioning, repair, key rotation, and uninstall
+        shell: bash
+        run: bash installer/unix/test-integration.sh

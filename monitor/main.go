@@ -27,7 +27,7 @@ const (
 
 // Overridden by release builds with:
 //   -ldflags "-X main.monitorVersion=<release-version>"
-var monitorVersion = "0.0.21-dev"
+var monitorVersion = "0.1.1-dev"
 
 type response struct {
 	EventType       string           `json:"eventType"`
@@ -577,6 +577,9 @@ func main() {
 	connect := flag.String("connect", "", "directly connect to an ESP32 address for transport testing (host or host:port)")
 	showVersion := flag.Bool("version", false, "print version and exit")
 	generateKey := flag.Bool("generate-key", false, "generate a random 32-byte ESPNS authentication key and exit")
+	provisionAuth := flag.Bool("provision-auth", false, "create a persistent 256-bit ESPNS auth key if config.json does not exist")
+	regenerateAuth := flag.Bool("regenerate-auth", false, "replace the persistent ESPNS auth key with a new 256-bit key")
+	firmwareConfigPath := flag.String("write-firmware-config", "", "write installer-managed ESPNetworkSerialConfig.h using the persistent host auth config")
 	stressTarget := flag.String("stress", "", "run binary echo stress test against an ESP32 address (host or host:port)")
 	stressBytes := flag.Int("stress-bytes", 1024*1024, "payload bytes per stress cycle")
 	stressCycles := flag.Int("stress-cycles", 5, "number of connect/authenticate/echo/disconnect stress cycles")
@@ -598,6 +601,15 @@ func main() {
 			os.Exit(1)
 		}
 		fmt.Println(key)
+		return
+	}
+
+	handled, provisioningErr := runAuthProvisioning(*provisionAuth, *regenerateAuth, *firmwareConfigPath)
+	if handled {
+		if provisioningErr != nil {
+			fmt.Fprintln(os.Stderr, "authentication provisioning error:", provisioningErr)
+			os.Exit(1)
+		}
 		return
 	}
 

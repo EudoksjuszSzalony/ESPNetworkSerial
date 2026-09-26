@@ -27,15 +27,14 @@ void setup() {
     delay(250);
   }
 
-#ifdef ESPNS_AUTH_KEY
-  ESPSerial.setAuthKey(ESPNS_AUTH_KEY);
-#endif
-
+  // Authentication can be supplied programmatically, by ESPNS_AUTH_KEY in
+  // secrets.h, or by the ESPNS_DEFAULT_AUTH_KEY provisioned by Setup.
   ESPSerial.begin();
 
-#ifdef ESPNS_AUTH_KEY
+#if defined(ESPNS_AUTH_KEY) || \
+    (defined(ESPNS_DEFAULT_AUTH_KEY) && !defined(ESPNS_DISABLE_DEFAULT_AUTH_KEY))
   if (!ESPSerial.authenticationEnabled()) {
-    ESPSerial.println("FATAL: ESPNS_AUTH_KEY must be 16..128 bytes.");
+    ESPSerial.println("FATAL: configured ESPNS auth key must be 16..128 bytes.");
     while (true) {
       delay(1000);
     }

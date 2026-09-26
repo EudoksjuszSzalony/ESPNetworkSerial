@@ -6,11 +6,14 @@
 #define ESPNS_WIFI_SSID "YOUR_SSID"
 #define ESPNS_WIFI_PASSWORD "YOUR_PASSWORD"
 
-// Optional ESPNetworkSerial mutual authentication.
-// Generate a key with:
-//   .\monitor\espnetworkserial-monitor.exe --generate-key
-// Then put the same value in monitor/config.json.
+// Optional per-sketch ESPNetworkSerial authentication override.
 //
-// Minimum: 16 bytes. Recommended: the generated 32-byte / 64-hex-character key.
+// ESPNetworkSerial Setup can provision a machine-local ESPNS_DEFAULT_AUTH_KEY
+// automatically, so most installed setups do not need a key here.
+//
+// Define ESPNS_AUTH_KEY only when this sketch should use a different key.
+// It takes priority over the installer-provided default.
+//
+// Minimum: 16 bytes. Recommended: a generated 32-byte / 64-hex-character key.
 // This key is separate from any ArduinoOTA password.
 // #define ESPNS_AUTH_KEY "PASTE_GENERATED_KEY_HERE"
