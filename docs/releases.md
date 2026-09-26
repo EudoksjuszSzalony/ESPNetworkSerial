@@ -1,6 +1,6 @@
 # Release Process
 
-> Status: automated release pipeline candidate.
+> Status: automated multi-platform release pipeline. v0.1.0 is public; the v0.1.1 development line adds Linux/macOS terminal setup packages.
 
 ESPNetworkSerial uses a single project version for the Arduino library release tag and the packaged host monitor.
 
@@ -11,7 +11,7 @@ Before creating a public tag, open **Actions -> Release -> Run workflow** and ru
 The default dry-run label is:
 
 ~~~text
-0.0.21-dev
+0.1.1-dev
 ~~~
 
 A dry run:
@@ -22,7 +22,8 @@ A dry run:
 - builds the host monitor for all supported release targets;
 - injects the selected version into `espnetworkserial-monitor --version`;
 - packages each binary with the monitor README, example config, and MIT license;
-- builds the per-user Windows installer and runs its integration-script tests;
+- builds the per-user Windows installer and runs its integration/auth-provisioning tests;
+- builds architecture-specific Linux/macOS terminal setup packages;
 - creates `SHA256SUMS.txt`;
 - uploads a complete release-assets workflow artifact;
 - does **not** create a GitHub Release.
@@ -55,6 +56,10 @@ espnetworkserial-monitor-<version>-linux-arm64.tar.gz
 espnetworkserial-monitor-<version>-macos-amd64.tar.gz
 espnetworkserial-monitor-<version>-macos-arm64.tar.gz
 espnetworkserial-setup-<version>-windows-amd64.exe
+espnetworkserial-setup-<version>-linux-amd64.tar.gz
+espnetworkserial-setup-<version>-linux-arm64.tar.gz
+espnetworkserial-setup-<version>-macos-amd64.tar.gz
+espnetworkserial-setup-<version>-macos-arm64.tar.gz
 SHA256SUMS.txt
 ~~~
 

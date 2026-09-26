@@ -4,7 +4,7 @@
 
 ESPNetworkSerial aims to make network serial feel like ordinary Arduino Serial: select your ESP32 network port, open Serial Monitor, and communicate bidirectionally over Wi-Fi — while keeping OTA available on the same device.
 
-> **Status:** pre-release / v0.1 release-candidate preparation. Native Arduino IDE monitoring, OTA coexistence, reconnect recovery, authenticated AES-256-GCM transport, release automation, Arduino Library Manager linting, and a Windows installer candidate are implemented.
+> **Status:** v0.1.0 is publicly released. The current v0.1.1 development line adds cross-platform setup packages and automatic machine-local authentication provisioning. Arduino Library Manager registration is planned after the new installers are validated.
 
 ## Why
 
@@ -122,7 +122,36 @@ examples/BasicMonitor/secrets.h
 
 and fill in your SSID/password once. `secrets.h` is ignored by Git.
 
+## Setup-provisioned authentication
+
+The end-user setup can provision secure ESPNS authentication automatically. On the first install, if no host `config.json` exists, Setup generates a random 256-bit key, stores it in the host config, and writes an installer-managed `ESPNetworkSerialConfig.h` into every detected ESP32 Arduino core.
+
+That generated header defines:
+
+~~~cpp
+#define ESPNS_DEFAULT_AUTH_KEY "..."
+~~~
+
+`ESPNetworkSerial.h` imports the header automatically when it is available on the ESP32 core include path. Normal sketches therefore do not need to copy the key manually.
+
+Authentication priority is:
+
+~~~text
+setAuthKey(...) called before begin()
+        ↓
+ESPNS_AUTH_KEY defined by the sketch
+        ↓
+ESPNS_DEFAULT_AUTH_KEY provisioned by Setup
+        ↓
+no key -> auth=none / mode=raw
+~~~
+
+Define `ESPNS_DISABLE_DEFAULT_AUTH_KEY` before including `ESPNetworkSerial.h` to deliberately ignore the machine-local default. A sketch-specific `ESPNS_AUTH_KEY` always takes priority over the generated default.
+
+Repair operations reuse the existing host key. Key regeneration is an explicit operation because rotating it requires previously compiled ESP32 firmware to be rebuilt/reflashed.
+
 ## Optional authentication
+
 
 ESPNetworkSerial can require mutual HMAC-SHA256 authentication before the serial stream opens.
 
@@ -166,6 +195,7 @@ If the ESP32 cannot be reached before the grace period expires, the monitor repo
 - Open protocol and open-source host monitor.
 - No Python, Node.js, or .NET runtime required by end users.
 - Standalone host binaries for Windows, Linux, and macOS.
+- End-user setup automation for Windows plus terminal-based Linux/macOS installation.
 - Transport/protocol architecture that can be extended without rewriting the monitor.
 
 ## Planned architecture
@@ -194,7 +224,7 @@ The host monitor is implemented in Go and speaks Arduino's Pluggable Monitor pro
 src/                 Arduino library source
 examples/            Arduino examples
 monitor/             Host monitor source
-installer/           Development/future installer work
+installer/           Windows GUI installer + Linux/macOS terminal setup
 docs/                Versioned technical documentation
 .github/             CI/release automation
 library.properties   Arduino library metadata
@@ -206,7 +236,7 @@ The Arduino library metadata and `src/` directory live at the repository root so
 
 The development checkout can already appear under **File -> Examples** and **Sketch -> Include Library** because Arduino scans locally installed libraries. It is not expected to appear in the sidebar **Library Manager** catalog yet: that catalog is populated from Arduino's Library Manager registry/index.
 
-ESPNetworkSerial will be submitted to the Arduino Library Manager registry after the first tagged public release and library metadata/API are stable enough to publish.
+ESPNetworkSerial v0.1.0 is tagged and publicly released. Library Manager submission is intentionally waiting for the cross-platform setup/auth-provisioning work to be validated so installing the Arduino library does not leave Linux/macOS users without an IDE monitor integration path.
 
 ## Documentation
 
@@ -218,6 +248,7 @@ ESPNetworkSerial will be submitted to the Arduino Library Manager registry after
 - [Firmware API stability](docs/api-stability.md)
 - [Release process](docs/releases.md)
 - [Windows end-user installer](docs/windows-installer.md)
+- [Linux/macOS terminal installer](docs/unix-installer.md)
 - [v0.1 release checklist](docs/v0.1-release-checklist.md)
 - [Adding another transport](docs/adding-a-transport.md)
 - [Windows development setup](docs/development-setup.md)
@@ -253,8 +284,11 @@ GitHub Wiki can provide the friendly how-to layer, while `docs/` remains the ver
 - [x] 8-second application stall survives without ESPNS reconnect
 - [x] TCP-only disconnect recovers through a fresh authenticated session
 - [x] Windows end-user installer build + Arduino core integration tooling
-- [ ] Windows end-user installer end-to-end validation on a clean machine
-- [ ] First tagged public release + Arduino Library Manager registration
+- [x] Windows end-user installer end-to-end validation on a normal Windows environment
+- [x] First tagged public release (`v0.1.0`)
+- [ ] Arduino Library Manager registration
+- [x] Linux/macOS terminal setup implementation + CI
+- [ ] Linux/macOS end-to-end installer validation on native user machines
 - [x] Host monitor Go tests + cross-platform CI build workflow
 - [x] Automated tagged multi-platform release builds + SHA-256 checksums
 - [ ] Windows/macOS code signing and notarization

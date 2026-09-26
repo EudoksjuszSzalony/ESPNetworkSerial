@@ -10,6 +10,7 @@ out/
 *.exe
 *.test
 *.out
+installer/unix/espnetworkserial-monitor
 
 # Arduino / PlatformIO
 .pio/

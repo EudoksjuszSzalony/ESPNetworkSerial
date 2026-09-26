@@ -1,6 +1,6 @@
 # Security
 
-> Status: ESPNS/1 freeze-candidate security design. Authenticated sessions provide mutual authentication, confidentiality and record integrity using HMAC-SHA256, HKDF-SHA256 and AES-256-GCM. The design has extensive automated and real-device regression testing but has not received an external security review.
+> Status: ESPNS/1 authenticated sessions provide mutual authentication, confidentiality and record integrity using HMAC-SHA256, HKDF-SHA256 and AES-256-GCM. The design has extensive automated and real-device regression testing but has not received an external security review.
 
 ESPNetworkSerial carries console data and may allow commands to be sent back to the ESP32, so security is part of the transport rather than an application-specific add-on.
 
@@ -36,13 +36,15 @@ The PSK:
 - must be between 16 and 128 bytes;
 - should normally be a randomly generated value.
 
-The host monitor can generate a suitable key:
+The host monitor can generate a suitable key manually:
 
 ~~~powershell
 espnetworkserial-monitor.exe --generate-key
 ~~~
 
-The exact generated text is used as the PSK on both sides.
+End-user Setup can also provision this automatically. If no host `config.json` exists, Setup generates a random 256-bit key, stores it in the host config, and writes the same value to an installer-managed `ESPNetworkSerialConfig.h` in each detected ESP32 core as `ESPNS_DEFAULT_AUTH_KEY`.
+
+Repair reuses the existing key. Rotation is explicit because firmware compiled before the rotation still contains the old PSK.
 
 ## Mutual authentication
 
@@ -141,19 +143,43 @@ The BasicMonitor example compiles the PSK into firmware. Anyone able to read unp
 
 ESP32 flash encryption / secure boot are separate platform-security topics and are not enabled by this library.
 
-### Pre-alpha cryptographic protocol
+### Custom protocol without external audit
 
-The implementation uses standard primitives, but the ESPNS composition, framing and implementation have not been externally audited. Do not treat the current pre-alpha build as a substitute for a reviewed production security protocol.
+The implementation uses standard primitives, but the ESPNS composition, framing and implementation have not been externally audited. Do not treat the current release as a substitute for a reviewed production security protocol where that level of assurance is required.
 
 ## Key storage
 
 ### ESP32
 
-The example reads `ESPNS_AUTH_KEY` from local `secrets.h`, which is ignored by Git.
+A sketch can provide `ESPNS_AUTH_KEY` directly, or call `setAuthKey(...)` before `begin()`.
+
+When Setup provisioning is used, the machine-local key is copied into an installer-managed:
+
+~~~text
+<ESP32 core>/cores/esp32/ESPNetworkSerialConfig.h
+~~~
+
+as:
+
+~~~cpp
+#define ESPNS_DEFAULT_AUTH_KEY "..."
+~~~
+
+The firmware key priority is:
+
+~~~text
+setAuthKey(...) before begin()
+        ↓
+ESPNS_AUTH_KEY
+        ↓
+ESPNS_DEFAULT_AUTH_KEY
+~~~
+
+`ESPNS_DISABLE_DEFAULT_AUTH_KEY` disables only the installer-provided default. The key is still compiled into firmware and should be considered recoverable by anyone able to read unprotected flash.
 
 ### Host
 
-Development builds read `monitor/config.json`, also ignored by Git.
+The installed monitor reads `config.json` next to its executable. Setup-created configs use restrictive file permissions where supported and are not printed to the terminal.
 
 Environment overrides:
 
@@ -163,7 +189,7 @@ Environment overrides:
 
 No authentication key is intentionally written to monitor logs.
 
-## Threat model still open before stable v1
+## Open security work
 
 - external protocol/security review;
 - per-device keys instead of one default key;

@@ -1,6 +1,6 @@
 # Windows End-User Installer
 
-> Status: pre-release installer candidate.
+> Status: Windows installer is released in v0.1.0. The v0.1.1 development line adds automatic authentication provisioning shared with Linux/macOS setup.
 
 The Windows installer removes the development requirement to clone the repository, install Go, build the monitor manually, or edit Arduino files by hand.
 
@@ -15,7 +15,10 @@ The per-user installer:
 - leaves the stock ESP32 ArduinoOTA upload recipe untouched;
 - refuses to overwrite another existing `pluggable_monitor.pattern.network` implementation;
 - creates a Start-menu **Repair Arduino integration** shortcut for newly installed ESP32 core versions;
-- removes only ESPNetworkSerial-managed blocks during uninstall.
+- generates a 256-bit ESPNS authentication key on first install when no host `config.json` exists;
+- writes the same key to installer-managed `ESPNetworkSerialConfig.h` files in detected ESP32 cores;
+- reuses the existing key on Repair/upgrade instead of silently rotating it;
+- removes only ESPNetworkSerial-managed blocks/config headers during uninstall.
 
 Administrator rights are not required.
 
@@ -27,15 +30,32 @@ The default install path is:
 %LOCALAPPDATA%\Programs\ESPNetworkSerial
 ~~~
 
-The monitor reads optional `config.json` from the same directory as the executable. The installer ships `config.example.json` but does not invent an authentication key automatically.
+The monitor reads `config.json` from the same directory as the executable.
 
-To enable authenticated ESPNS, copy the example to:
+On first install, when that file does not already exist, Setup automatically generates a random 256-bit ESPNS key and writes:
 
-~~~text
-config.json
+~~~json
+{
+  "authKey": "<generated-key>",
+  "allowUnauthenticated": false
+}
 ~~~
 
-and place the same generated key in the ESP32 sketch.
+The same key is written into each detected ESP32 core as:
+
+~~~text
+cores\esp32\ESPNetworkSerialConfig.h
+~~~
+
+with:
+
+~~~cpp
+#define ESPNS_DEFAULT_AUTH_KEY "<generated-key>"
+~~~
+
+`ESPNetworkSerial.h` imports that installer-managed file automatically. A sketch can override the machine-local default with `ESPNS_AUTH_KEY`, use `setAuthKey(...)` before `begin()`, or deliberately disable the machine-local default with `ESPNS_DISABLE_DEFAULT_AUTH_KEY`.
+
+If `config.json` already exists, Repair/upgrade preserves it. An existing config with an empty `authKey` is treated as an intentional request to leave authentication disabled; Setup does not silently replace it.
 
 ## Core updates
 
@@ -47,7 +67,7 @@ Start menu
      -> Repair Arduino integration
 ~~~
 
-The repair operation is idempotent and can be run repeatedly.
+The repair operation is idempotent and can be run repeatedly. It also propagates the existing host key into newly installed ESP32 core versions. Repair never rotates a valid existing key.
 
 ## Existing network pluggable monitor
 
@@ -75,9 +95,9 @@ The uninstaller runs the unregister helper before deleting application files. It
 # ESPNetworkSerial END
 ~~~
 
-Other `platform.local.txt` and `boards.local.txt` content is preserved.
+Other `platform.local.txt` and `boards.local.txt` content is preserved. Installer-managed `ESPNetworkSerialConfig.h` files are removed, while an unrelated file with the same name but without the ESPNetworkSerial managed marker is preserved.
 
-The uninstaller also removes the generated `integration-status.txt` and local `config.json`. The latter may contain the ESPNS pre-shared authentication key, so uninstall does not intentionally leave that secret behind in the application directory.
+The uninstaller also removes the generated `integration-status.txt` and local `config.json`. The latter contains the ESPNS pre-shared authentication key by default, so uninstall does not intentionally leave that secret behind in the application directory.
 
 ## Signing status
 

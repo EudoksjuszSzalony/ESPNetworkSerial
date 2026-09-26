@@ -2,7 +2,7 @@
 
 The host-side bridge used by Arduino IDE.
 
-## Current prototype
+## Host monitor
 
 The monitor is implemented in Go using only the standard library. It implements Arduino Pluggable Monitor protocol v1 commands:
 
@@ -17,17 +17,27 @@ For `network` ports, `OPEN` connects to the selected ESP32 address on TCP port `
 
 ## ESPNS authentication
 
-The monitor supports optional mutual HMAC-SHA256 authentication.
+The monitor supports mutual HMAC-SHA256 authentication.
 
-Generate a random 32-byte development key:
+For manual configuration, generate a random 32-byte key:
 
 ~~~powershell
 .\espnetworkserial-monitor.exe --generate-key
 ~~~
 
-Copy `config.example.json` to `config.json` next to the executable and place the generated text in `authKey`. `monitor/config.json` is ignored by Git.
+Copy `config.example.json` to `config.json` next to the executable and place the generated text in `authKey`.
 
-Configure the exact same text on the ESP32 side through `ESPNS_AUTH_KEY` / `ESPSerial.setAuthKey(...)` (or the same method on a custom `ESPNetworkSerial` instance).
+End-user Setup uses provisioning commands instead:
+
+~~~text
+--provision-auth
+--regenerate-auth
+--write-firmware-config <ESPNetworkSerialConfig.h>
+~~~
+
+`--provision-auth` creates a random 256-bit key only when no config exists. Repair therefore reuses the existing key. `--regenerate-auth` deliberately rotates it. `--write-firmware-config` copies the persistent host key into an installer-managed firmware header as `ESPNS_DEFAULT_AUTH_KEY` without printing the key to the terminal.
+
+A sketch-defined `ESPNS_AUTH_KEY` or a programmatic `setAuthKey(...)` can override the installer-provisioned default.
 
 When a host key is configured, an `auth=none` endpoint is rejected by default to avoid silent downgrade. `allowUnauthenticated=true` can deliberately relax that behavior for mixed development environments.
 
@@ -85,7 +95,7 @@ The tool generates deterministic binary data, sends it through the full ESPNS tr
 
 See [Windows development setup](../docs/development-setup.md).
 
-The current installer writes a development-only `pluggable_monitor.pattern.network` recipe to `platform.local.txt`. This is intentionally not the final distribution mechanism.
+The Windows installer and Linux/macOS terminal setup write an ESPNetworkSerial-managed `pluggable_monitor.pattern.network` recipe to each detected ESP32 core `platform.local.txt`. They preserve unrelated content and refuse to overwrite another third-party network monitor recipe.
 
 ## CI
 
