@@ -4,7 +4,7 @@
 
 ESPNetworkSerial aims to make network serial feel like ordinary Arduino Serial: select your ESP32 network port, open Serial Monitor, and communicate bidirectionally over Wi-Fi — while keeping OTA available on the same device.
 
-> **Status:** v0.1.0 is publicly released. v0.1.1 is the current release candidate, adding cross-platform setup packages and automatic machine-local authentication provisioning. Arduino Library Manager registration follows the v0.1.1 release.
+> **Status:** v0.1.1 is publicly released. Arduino Library Manager registration has been accepted; index propagation is pending.
 
 ## Installation
 
@@ -15,7 +15,7 @@ ESPNetworkSerial has **two parts**:
 
 ### 1. Install the Arduino library
 
-Once ESPNetworkSerial is indexed by Arduino Library Manager:
+Once the accepted registry entry has propagated to Arduino Library Manager:
 
 ~~~text
 Arduino IDE
@@ -24,7 +24,7 @@ Arduino IDE
   -> Install
 ~~~
 
-Until then, the library can be installed from this repository in the usual Arduino development workflow.
+Until indexing finishes, the library can still be installed from this repository in the usual Arduino development workflow.
 
 ### 2. Install the companion host setup
 
@@ -294,7 +294,7 @@ The Arduino library metadata and `src/` directory live at the repository root so
 
 The development checkout can already appear under **File -> Examples** and **Sketch -> Include Library** because Arduino scans locally installed libraries. It is not expected to appear in the sidebar **Library Manager** catalog yet: that catalog is populated from Arduino's Library Manager registry/index.
 
-ESPNetworkSerial v0.1.0 is tagged and publicly released. Library Manager submission is intentionally waiting for the cross-platform setup/auth-provisioning work to be validated so installing the Arduino library does not leave Linux/macOS users without an IDE monitor integration path.
+ESPNetworkSerial v0.1.1 is tagged and publicly released. The Arduino Library Manager registration PR was accepted and merged; Arduino's indexer will publish the library to the Library Manager catalog after propagation.
 
 ## Documentation
 
@@ -344,7 +344,7 @@ GitHub Wiki can provide the friendly how-to layer, while `docs/` remains the ver
 - [x] Windows end-user installer build + Arduino core integration tooling
 - [x] Windows end-user installer end-to-end validation on a normal Windows environment
 - [x] First tagged public release (`v0.1.0`)
-- [ ] Arduino Library Manager registration
+- [x] Arduino Library Manager registration accepted and merged; index propagation pending
 - [x] Linux/macOS terminal setup implementation + CI
 - [x] Linux/macOS native CI validation; dedicated user-machine validation deferred to community feedback
 - [x] Host monitor Go tests + cross-platform CI build workflow
