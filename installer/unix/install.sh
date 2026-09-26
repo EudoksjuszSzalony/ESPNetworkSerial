@@ -70,7 +70,7 @@ CONFIG_PATH="$APP_DIR/config.json"
 STATUS_PATH="$APP_DIR/integration-status.txt"
 
 case "$MONITOR_PATH" in
-  *"*|*$'\n'*) espns_die "Install path contains an unsupported quote/newline character." ;;
+  *'"'*) espns_die "Install path contains an unsupported quote character." ;;
 esac
 
 espns_step 2 6 "Installing host monitor"
