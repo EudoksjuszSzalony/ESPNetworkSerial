@@ -1,6 +1,6 @@
 # Release Process
 
-> Status: automated multi-platform release pipeline. v0.1.0 is public; the v0.1.1 development line adds Linux/macOS terminal setup packages.
+> Status: automated multi-platform release pipeline. v0.1.1 is public; the v0.1.2 development line hardens ESP32 transmit backpressure so network clients cannot stall application work.
 
 ESPNetworkSerial uses a single project version for the Arduino library release tag and the packaged host monitor.
 
@@ -11,7 +11,7 @@ Before creating a public tag, open **Actions -> Release -> Run workflow** and ru
 The default dry-run label is:
 
 ~~~text
-0.1.1-dev
+0.1.2-dev
 ~~~
 
 A dry run:
