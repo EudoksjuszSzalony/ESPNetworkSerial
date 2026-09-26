@@ -47,6 +47,21 @@ jobs:
             examples/BasicMonitor
           rm -f "$CONFIG"
 
+      - name: Compile with sketch-local ESPNS_AUTH_KEY override
+        run: |
+          cat > examples/BasicMonitor/secrets.h <<'EOF'
+          #pragma once
+          #define ESPNS_WIFI_SSID "ci"
+          #define ESPNS_WIFI_PASSWORD "ci"
+          #define ESPNS_AUTH_KEY "abcdef0123456789abcdef0123456789"
+          EOF
+          arduino-cli compile \
+            --fqbn esp32:esp32:esp32 \
+            --library . \
+            --build-path /tmp/espns-sketch-auth-build \
+            examples/BasicMonitor
+          rm -f examples/BasicMonitor/secrets.h
+
       - name: Compile WirelessOTAAndMonitor
         run: |
           arduino-cli compile             --fqbn esp32:esp32:esp32             --library .             examples/WirelessOTAAndMonitor

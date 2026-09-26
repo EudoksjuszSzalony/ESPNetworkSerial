@@ -13,6 +13,64 @@
 
 ESPNetworkSerial ESPSerial;
 
+namespace {
+
+struct CompileTimeAuthState {
+  bool explicitPresent;
+  bool explicitValid;
+  bool defaultDisabled;
+  char explicitKey[ESPNETWORKSERIAL_AUTH_KEY_MAX_LENGTH + 1];
+};
+
+CompileTimeAuthState &compileTimeAuthState() {
+  static CompileTimeAuthState state{};
+  return state;
+}
+
+}  // namespace
+
+namespace espnetworkserial_detail {
+
+void registerSketchAuthKey(const char *key) {
+  CompileTimeAuthState &state = compileTimeAuthState();
+  state.explicitPresent = true;
+  state.explicitValid = false;
+  std::memset(state.explicitKey, 0, sizeof(state.explicitKey));
+
+  if (key == nullptr) {
+    return;
+  }
+
+  const size_t length = std::strlen(key);
+  if (length < ESPNETWORKSERIAL_AUTH_KEY_MIN_LENGTH ||
+      length > ESPNETWORKSERIAL_AUTH_KEY_MAX_LENGTH) {
+    return;
+  }
+
+  std::memcpy(state.explicitKey, key, length);
+  state.explicitKey[length] = '\0';
+  state.explicitValid = true;
+}
+
+void disableDefaultAuthKey() {
+  compileTimeAuthState().defaultDisabled = true;
+}
+
+bool hasSketchAuthKeyOverride() {
+  return compileTimeAuthState().explicitPresent;
+}
+
+const char *sketchAuthKeyOverride() {
+  CompileTimeAuthState &state = compileTimeAuthState();
+  return state.explicitValid ? state.explicitKey : nullptr;
+}
+
+bool defaultAuthKeyDisabled() {
+  return compileTimeAuthState().defaultDisabled;
+}
+
+}  // namespace espnetworkserial_detail
+
 ESPNetworkSerialMux::ESPNetworkSerialMux()
     : _streams{}, _streamCount(0), _nextReadIndex(0) {}
 
@@ -212,21 +270,21 @@ ESPNetworkSerial::ESPNetworkSerial(uint16_t port)
 }
 
 void ESPNetworkSerial::begin() {
-#if defined(ESPNS_AUTH_KEY)
-  // A sketch-defined key is the explicit compile-time override.
-  // A programmatic setAuthKey() call made before begin() has even higher
-  // priority and is therefore never overwritten here.
+  // Programmatic setAuthKey() made before begin() always wins.
   if (!_network.authenticationEnabled()) {
-    _network.setAuthKey(ESPNS_AUTH_KEY);
-  }
-#elif defined(ESPNS_DEFAULT_AUTH_KEY) && !defined(ESPNS_DISABLE_DEFAULT_AUTH_KEY)
-  // ESPNetworkSerial Setup may install a machine-local default key into the
-  // ESP32 core include path. Sketches can override it with ESPNS_AUTH_KEY or
-  // opt out with ESPNS_DISABLE_DEFAULT_AUTH_KEY.
-  if (!_network.authenticationEnabled()) {
-    _network.setAuthKey(ESPNS_DEFAULT_AUTH_KEY);
-  }
+    if (espnetworkserial_detail::hasSketchAuthKeyOverride()) {
+      // An explicit sketch override also suppresses fallback when invalid,
+      // so a typo never silently changes the trust domain.
+      const char *sketchKey = espnetworkserial_detail::sketchAuthKeyOverride();
+      if (sketchKey != nullptr) {
+        _network.setAuthKey(sketchKey);
+      }
+    } else if (!espnetworkserial_detail::defaultAuthKeyDisabled()) {
+#if defined(ESPNS_DEFAULT_AUTH_KEY)
+      _network.setAuthKey(ESPNS_DEFAULT_AUTH_KEY);
 #endif
+    }
+  }
 
 #if ESPNETWORKSERIAL_GLOBAL_SERIAL_MIRROR
   // The built-in ESPSerial object is the zero-boilerplate path: initialize

@@ -1,6 +1,5 @@
 #include <WiFi.h>
 #include <ArduinoOTA.h>
-#include <ESPNetworkSerial.h>
 
 #if __has_include("secrets.h")
 #include "secrets.h"
@@ -9,6 +8,10 @@
 #define ESPNS_WIFI_PASSWORD "YOUR_PASSWORD"
 #warning "Using placeholder Wi-Fi credentials. Create secrets.h in this sketch folder and define ESPNS_WIFI_SSID / ESPNS_WIFI_PASSWORD."
 #endif
+
+// Keep sketch-local ESPNS_AUTH_KEY / ESPNS_DISABLE_DEFAULT_AUTH_KEY definitions
+// above ESPNetworkSerial.h so the library can register those overrides.
+#include <ESPNetworkSerial.h>
 
 const char *OTA_HOSTNAME = "espnetworkserial-ota";
 constexpr uint32_t OTA_TIMEOUT_MS = 5000;

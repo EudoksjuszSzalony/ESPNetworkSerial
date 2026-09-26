@@ -1,6 +1,5 @@
 #include <WiFi.h>
 #include <ESPmDNS.h>
-#include <ESPNetworkSerial.h>
 
 #if __has_include("secrets.h")
 #include "secrets.h"
@@ -8,6 +7,10 @@
 #include "secrets.example.h"
 #warning "Using placeholder Wi-Fi credentials. Copy secrets.example.h to secrets.h and fill in your Wi-Fi credentials."
 #endif
+
+// ESPNS_AUTH_KEY / ESPNS_DISABLE_DEFAULT_AUTH_KEY must be defined before this
+// include so sketch-local overrides can be registered before setup().
+#include <ESPNetworkSerial.h>
 
 const char *MONITOR_HOSTNAME = "espnetworkserial-basic";
 constexpr uint32_t NETWORK_SERIAL_WAIT_MS = 12000;

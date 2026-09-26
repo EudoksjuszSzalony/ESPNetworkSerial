@@ -45,6 +45,39 @@
 #define ESPNETWORKSERIAL_AUTH_KEY_MAX_LENGTH 128
 #endif
 
+namespace espnetworkserial_detail {
+
+// Sketch-local preprocessor settings are compiled in a different translation
+// unit than ESPNetworkSerial.cpp. Small registrars carry those settings into
+// runtime state before setup() without touching the global ESPSerial object
+// during static initialization.
+void registerSketchAuthKey(const char *key);
+void disableDefaultAuthKey();
+
+class SketchAuthKeyRegistrar {
+public:
+  explicit SketchAuthKeyRegistrar(const char *key) {
+    registerSketchAuthKey(key);
+  }
+};
+
+class DefaultAuthOptOutRegistrar {
+public:
+  DefaultAuthOptOutRegistrar() {
+    disableDefaultAuthKey();
+  }
+};
+
+#if defined(ESPNS_AUTH_KEY)
+static SketchAuthKeyRegistrar espnsSketchAuthKeyRegistrar(ESPNS_AUTH_KEY);
+#endif
+
+#if defined(ESPNS_DISABLE_DEFAULT_AUTH_KEY)
+static DefaultAuthOptOutRegistrar espnsDefaultAuthOptOutRegistrar;
+#endif
+
+}  // namespace espnetworkserial_detail
+
 #ifndef ESPNETWORKSERIAL_AUTH_NONCE_SIZE
 #define ESPNETWORKSERIAL_AUTH_NONCE_SIZE 16
 #endif
