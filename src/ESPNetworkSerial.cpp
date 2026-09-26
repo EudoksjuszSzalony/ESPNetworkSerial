@@ -831,7 +831,7 @@ void ESPNetworkSerialTCP::beginAuthChallenge(const char *clientNonceHex) {
   resetHandshakeLine();
 }
 
-bool ESPNetworkSerialTCP::verifyClientProofbool ESPNetworkSerialTCP::verifyClientProof(const char *proofHex) {
+bool ESPNetworkSerialTCP::verifyClientProof(const char *proofHex) {
   uint8_t suppliedProof[32];
   if (!hexToBytes(proofHex, sizeof(suppliedProof), suppliedProof)) {
     return false;
@@ -926,7 +926,7 @@ void ESPNetworkSerialTCP::processHandshakeLine() {
   }
 }
 
-void ESPNetworkSerialTCP::handleHandshake()void ESPNetworkSerialTCP::handleHandshake() {
+void ESPNetworkSerialTCP::handleHandshake() {
   if (!_client || !_client.connected() || _protocolReady) {
     return;
   }
@@ -970,7 +970,7 @@ void ESPNetworkSerialTCP::handleHandshake()void ESPNetworkSerialTCP::handleHands
   }
 }
 
-void ESPNetworkSerialTCP::makeSecureNonce(void ESPNetworkSerialTCP::makeSecureNonce(
+void ESPNetworkSerialTCP::makeSecureNonce(
     const uint8_t prefix[ESPNETWORKSERIAL_SECURE_NONCE_PREFIX_SIZE],
     uint64_t sequence, uint8_t nonce[12]) const {
   std::memcpy(nonce, prefix, ESPNETWORKSERIAL_SECURE_NONCE_PREFIX_SIZE);
@@ -1122,7 +1122,7 @@ bool ESPNetworkSerialTCP::stageSecureRecord(const uint8_t *buffer,
   return true;
 }
 
-bool ESPNetworkSerialTCP::decryptSecureRecord()bool ESPNetworkSerialTCP::decryptSecureRecord() {
+bool ESPNetworkSerialTCP::decryptSecureRecord() {
   if (_rxCipherLength == 0 ||
       _rxCipherLength > ESPNETWORKSERIAL_SECURE_MAX_RECORD ||
       _rxCipherReceived != _rxCipherLength ||
@@ -1295,7 +1295,7 @@ void ESPNetworkSerialTCP::handle() {
   handleHandshake();
 }
 
-bool ESPNetworkSerialTCP::waitForConnection()bool ESPNetworkSerialTCP::waitForConnection() {
+bool ESPNetworkSerialTCP::waitForConnection() {
   if (!_started) {
     begin();
   }
@@ -1404,7 +1404,7 @@ size_t ESPNetworkSerialTCP::write(const uint8_t *buffer, size_t size) {
   return total;
 }
 
-int ESPNetworkSerialTCP::available()int ESPNetworkSerialTCP::available() {
+int ESPNetworkSerialTCP::available() {
   if (_secureMode && _protocolReady && _client && _client.connected() &&
       _rxPlainOffset < _rxPlainLength) {
     return static_cast<int>(_rxPlainLength - _rxPlainOffset);
