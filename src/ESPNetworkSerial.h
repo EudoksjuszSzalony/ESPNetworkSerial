@@ -154,6 +154,11 @@ public:
   uint16_t port() const;
   IPAddress remoteIP();
 
+  uint64_t droppedTxBytes() const;
+  uint32_t droppedTxWrites() const;
+  size_t pendingTxBytes() const;
+  void clearTxDropCounters();
+
   using Print::write;
   size_t write(uint8_t byte) override;
   size_t write(const uint8_t *buffer, size_t size) override;
@@ -183,10 +188,13 @@ private:
 
   void resetSecureState();
   void resetRxRecordAssembly();
+  void resetTxPending();
   void handleSecureRx();
   bool decryptSecureRecord();
-  bool writeSecureRecord(const uint8_t *buffer, size_t size);
-  bool writeClientAll(const uint8_t *buffer, size_t size);
+  bool stageSecureRecord(const uint8_t *buffer, size_t size);
+  void drainTxPending();
+  bool sendControlLine(const char *line);
+  void recordTxDrop(size_t bytes);
   void makeSecureNonce(const uint8_t prefix[ESPNETWORKSERIAL_SECURE_NONCE_PREFIX_SIZE],
                        uint64_t sequence, uint8_t nonce[12]) const;
 
@@ -212,6 +220,14 @@ private:
   uint8_t _rxNoncePrefix[ESPNETWORKSERIAL_SECURE_NONCE_PREFIX_SIZE];
   uint64_t _txSequence;
   uint64_t _rxSequence;
+
+  uint8_t _txPending[ESPNETWORKSERIAL_SECURE_HEADER_SIZE +
+                     ESPNETWORKSERIAL_SECURE_MAX_RECORD +
+                     ESPNETWORKSERIAL_SECURE_TAG_SIZE];
+  size_t _txPendingLength;
+  size_t _txPendingOffset;
+  uint64_t _txDroppedBytes;
+  uint32_t _txDroppedWrites;
 
   uint8_t _rxRecordHeader[ESPNETWORKSERIAL_SECURE_HEADER_SIZE];
   size_t _rxRecordHeaderLength;
@@ -250,6 +266,11 @@ public:
   bool connected();
   uint16_t port() const;
   IPAddress remoteIP();
+
+  uint64_t droppedTxBytes() const;
+  uint32_t droppedTxWrites() const;
+  size_t pendingTxBytes() const;
+  void clearTxDropCounters();
 
   ESPNetworkSerialTCP &tcp();
   const ESPNetworkSerialTCP &tcp() const;

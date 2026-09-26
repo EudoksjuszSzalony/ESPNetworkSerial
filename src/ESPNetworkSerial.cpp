@@ -2,8 +2,10 @@
 
 #include <cstring>
 #include <cstdio>
+#include <errno.h>
 
 #include <esp_random.h>
+#include <lwip/sockets.h>
 #include <mbedtls/md.h>
 #include <mbedtls/gcm.h>
 
@@ -368,6 +370,22 @@ IPAddress ESPNetworkSerial::remoteIP() {
   return _network.remoteIP();
 }
 
+uint64_t ESPNetworkSerial::droppedTxBytes() const {
+  return _network.droppedTxBytes();
+}
+
+uint32_t ESPNetworkSerial::droppedTxWrites() const {
+  return _network.droppedTxWrites();
+}
+
+size_t ESPNetworkSerial::pendingTxBytes() const {
+  return _network.pendingTxBytes();
+}
+
+void ESPNetworkSerial::clearTxDropCounters() {
+  _network.clearTxDropCounters();
+}
+
 ESPNetworkSerialTCP &ESPNetworkSerial::tcp() {
   return _network;
 }
@@ -425,6 +443,11 @@ ESPNetworkSerialTCP::ESPNetworkSerialTCP(uint16_t port)
       _rxNoncePrefix{},
       _txSequence(0),
       _rxSequence(0),
+      _txPending{},
+      _txPendingLength(0),
+      _txPendingOffset(0),
+      _txDroppedBytes(0),
+      _txDroppedWrites(0),
       _rxRecordHeader{},
       _rxRecordHeaderLength(0),
       _rxCipherLength(0),
@@ -652,6 +675,11 @@ void ESPNetworkSerialTCP::resetRxRecordAssembly() {
   _rxTagReceived = 0;
 }
 
+void ESPNetworkSerialTCP::resetTxPending() {
+  _txPendingLength = 0;
+  _txPendingOffset = 0;
+}
+
 void ESPNetworkSerialTCP::resetSecureState() {
   _secureMode = false;
   std::memset(_txKey, 0, sizeof(_txKey));
@@ -673,6 +701,7 @@ void ESPNetworkSerialTCP::resetProtocolState() {
   std::memset(_clientNonceHex, 0, sizeof(_clientNonceHex));
   std::memset(_serverNonceHex, 0, sizeof(_serverNonceHex));
   resetSecureState();
+  resetTxPending();
 }
 
 void ESPNetworkSerialTCP::closeProtocolClient() {
@@ -755,7 +784,7 @@ bool ESPNetworkSerialTCP::deriveSessionKeys() {
 void ESPNetworkSerialTCP::beginAuthChallenge(const char *clientNonceHex) {
   if (clientNonceHex == nullptr ||
       std::strlen(clientNonceHex) != ESPNETWORKSERIAL_AUTH_NONCE_SIZE * 2) {
-    _client.print("ESPNS/1 ERR invalid_nonce\n");
+    sendControlLine("ESPNS/1 ERR invalid_nonce\n");
     closeProtocolClient();
     return;
   }
@@ -763,7 +792,7 @@ void ESPNetworkSerialTCP::beginAuthChallenge(const char *clientNonceHex) {
   uint8_t decodedClientNonce[ESPNETWORKSERIAL_AUTH_NONCE_SIZE];
   if (!hexToBytes(clientNonceHex, ESPNETWORKSERIAL_AUTH_NONCE_SIZE,
                   decodedClientNonce)) {
-    _client.print("ESPNS/1 ERR invalid_nonce\n");
+    sendControlLine("ESPNS/1 ERR invalid_nonce\n");
     closeProtocolClient();
     return;
   }
@@ -777,7 +806,7 @@ void ESPNetworkSerialTCP::beginAuthChallenge(const char *clientNonceHex) {
 
   uint8_t proof[32];
   if (!computeHmac("SERVER", kESPNSecureMode, proof)) {
-    _client.print("ESPNS/1 ERR auth_internal\n");
+    sendControlLine("ESPNS/1 ERR auth_internal\n");
     closeProtocolClient();
     return;
   }
@@ -785,13 +814,17 @@ void ESPNetworkSerialTCP::beginAuthChallenge(const char *clientNonceHex) {
   char proofHex[65];
   bytesToHex(proof, sizeof(proof), proofHex);
 
-  _client.print("ESPNS/1 CHALLENGE auth=hmac-sha256 nonce=");
-  _client.print(_serverNonceHex);
-  _client.print(" proof=");
-  _client.print(proofHex);
-  _client.print(" mode=");
-  _client.print(kESPNSecureMode);
-  _client.print("\n");
+  char response[ESPNETWORKSERIAL_HANDSHAKE_MAX_LENGTH];
+  const int responseLength = std::snprintf(
+      response, sizeof(response),
+      "ESPNS/1 CHALLENGE auth=hmac-sha256 nonce=%s proof=%s mode=%s\n",
+      _serverNonceHex, proofHex, kESPNSecureMode);
+  if (responseLength <= 0 ||
+      static_cast<size_t>(responseLength) >= sizeof(response) ||
+      !sendControlLine(response)) {
+    closeProtocolClient();
+    return;
+  }
 
   _handshakeState = HandshakeState::WaitingAuth;
   _handshakeStartedAt = millis();
@@ -821,13 +854,16 @@ void ESPNetworkSerialTCP::processHandshakeLine() {
     if (std::strncmp(_handshakeBuffer, helloPrefix, helloPrefixLength) != 0 ||
         (_handshakeBuffer[helloPrefixLength] != '\0' &&
          _handshakeBuffer[helloPrefixLength] != ' ')) {
-      _client.print("ESPNS/1 ERR bad_hello\n");
+      sendControlLine("ESPNS/1 ERR bad_hello\n");
       closeProtocolClient();
       return;
     }
 
     if (!authenticationEnabled()) {
-      _client.print("ESPNS/1 OK auth=none mode=raw\n");
+      if (!sendControlLine("ESPNS/1 OK auth=none mode=raw\n")) {
+        closeProtocolClient();
+        return;
+      }
       _protocolReady = true;
       _handshakeState = HandshakeState::Ready;
       return;
@@ -836,7 +872,7 @@ void ESPNetworkSerialTCP::processHandshakeLine() {
     char clientNonce[(ESPNETWORKSERIAL_AUTH_NONCE_SIZE * 2) + 1];
     if (!getControlField(_handshakeBuffer, "nonce=", clientNonce,
                          sizeof(clientNonce))) {
-      _client.print("ESPNS/1 ERR nonce_required\n");
+      sendControlLine("ESPNS/1 ERR nonce_required\n");
       closeProtocolClient();
       return;
     }
@@ -851,7 +887,7 @@ void ESPNetworkSerialTCP::processHandshakeLine() {
     if (std::strncmp(_handshakeBuffer, authPrefix, authPrefixLength) != 0 ||
         (_handshakeBuffer[authPrefixLength] != '\0' &&
          _handshakeBuffer[authPrefixLength] != ' ')) {
-      _client.print("ESPNS/1 ERR bad_auth\n");
+      sendControlLine("ESPNS/1 ERR bad_auth\n");
       closeProtocolClient();
       return;
     }
@@ -860,20 +896,28 @@ void ESPNetworkSerialTCP::processHandshakeLine() {
     if (!getControlField(_handshakeBuffer, "proof=", proofHex,
                          sizeof(proofHex)) ||
         !verifyClientProof(proofHex)) {
-      _client.print("ESPNS/1 ERR auth_failed\n");
+      sendControlLine("ESPNS/1 ERR auth_failed\n");
       closeProtocolClient();
       return;
     }
 
     if (!deriveSessionKeys()) {
-      _client.print("ESPNS/1 ERR secure_internal\n");
+      sendControlLine("ESPNS/1 ERR secure_internal\n");
       closeProtocolClient();
       return;
     }
 
-    _client.print("ESPNS/1 OK auth=hmac-sha256 mode=");
-    _client.print(kESPNSecureMode);
-    _client.print("\n");
+    char response[96];
+    const int responseLength =
+        std::snprintf(response, sizeof(response),
+                      "ESPNS/1 OK auth=hmac-sha256 mode=%s\n",
+                      kESPNSecureMode);
+    if (responseLength <= 0 ||
+        static_cast<size_t>(responseLength) >= sizeof(response) ||
+        !sendControlLine(response)) {
+      closeProtocolClient();
+      return;
+    }
 
     _secureMode = true;
     _protocolReady = true;
@@ -910,7 +954,7 @@ void ESPNetworkSerialTCP::handleHandshake() {
     }
 
     if (_handshakeLength + 1 >= sizeof(_handshakeBuffer)) {
-      _client.print("ESPNS/1 ERR line_too_long\n");
+      sendControlLine("ESPNS/1 ERR line_too_long\n");
       closeProtocolClient();
       return;
     }
@@ -921,7 +965,7 @@ void ESPNetworkSerialTCP::handleHandshake() {
   if (_handshakeStartedAt != 0 &&
       static_cast<uint32_t>(millis() - _handshakeStartedAt) >=
           ESPNETWORKSERIAL_HANDSHAKE_TIMEOUT_MS) {
-    _client.print("ESPNS/1 ERR timeout\n");
+    sendControlLine("ESPNS/1 ERR timeout\n");
     closeProtocolClient();
   }
 }
@@ -933,35 +977,123 @@ void ESPNetworkSerialTCP::makeSecureNonce(
   writeUint64BE(nonce + ESPNETWORKSERIAL_SECURE_NONCE_PREFIX_SIZE, sequence);
 }
 
-bool ESPNetworkSerialTCP::writeClientAll(const uint8_t *buffer, size_t size) {
-  size_t offset = 0;
-  while (offset < size) {
-    const size_t written = _client.write(buffer + offset, size - offset);
-    if (written == 0) {
-      return false;
-    }
-    offset += written;
-  }
-  return true;
-}
-
-bool ESPNetworkSerialTCP::writeSecureRecord(const uint8_t *buffer, size_t size) {
-  if (!_secureMode || buffer == nullptr || size == 0 ||
-      size > ESPNETWORKSERIAL_SECURE_MAX_RECORD ||
-      _txSequence == UINT64_MAX) {
+bool ESPNetworkSerialTCP::sendControlLine(const char *line) {
+  if (!_client || !_client.connected() || line == nullptr) {
     return false;
   }
 
-  uint8_t header[ESPNETWORKSERIAL_SECURE_HEADER_SIZE];
+  const size_t length = std::strlen(line);
+  if (length == 0) {
+    return true;
+  }
+
+  const int socketFd = _client.fd();
+  if (socketFd < 0) {
+    return false;
+  }
+
+  const int sent = send(socketFd, line, length, MSG_DONTWAIT);
+  return sent >= 0 && static_cast<size_t>(sent) == length;
+}
+
+size_t ESPNetworkSerialTCP::pendingTxBytes() const {
+  if (_txPendingOffset >= _txPendingLength) {
+    return 0;
+  }
+  return _txPendingLength - _txPendingOffset;
+}
+
+uint64_t ESPNetworkSerialTCP::droppedTxBytes() const {
+  return _txDroppedBytes;
+}
+
+uint32_t ESPNetworkSerialTCP::droppedTxWrites() const {
+  return _txDroppedWrites;
+}
+
+void ESPNetworkSerialTCP::clearTxDropCounters() {
+  _txDroppedBytes = 0;
+  _txDroppedWrites = 0;
+}
+
+void ESPNetworkSerialTCP::recordTxDrop(size_t bytes) {
+  if (bytes == 0) {
+    return;
+  }
+
+  const uint64_t count = static_cast<uint64_t>(bytes);
+  if (UINT64_MAX - _txDroppedBytes < count) {
+    _txDroppedBytes = UINT64_MAX;
+  } else {
+    _txDroppedBytes += count;
+  }
+
+  if (_txDroppedWrites != UINT32_MAX) {
+    ++_txDroppedWrites;
+  }
+}
+
+void ESPNetworkSerialTCP::drainTxPending() {
+  if (pendingTxBytes() == 0) {
+    resetTxPending();
+    return;
+  }
+
+  if (!_client || !_client.connected() || !_protocolReady) {
+    resetTxPending();
+    return;
+  }
+
+  const int socketFd = _client.fd();
+  if (socketFd < 0) {
+    closeProtocolClient();
+    return;
+  }
+
+  const size_t remaining = _txPendingLength - _txPendingOffset;
+  const int sent =
+      send(socketFd, _txPending + _txPendingOffset, remaining, MSG_DONTWAIT);
+
+  if (sent > 0) {
+    _txPendingOffset += static_cast<size_t>(sent);
+    if (_txPendingOffset >= _txPendingLength) {
+      resetTxPending();
+    }
+    return;
+  }
+
+  if (sent == 0) {
+    closeProtocolClient();
+    return;
+  }
+
+  const int sendError = errno;
+  if (sendError == EAGAIN || sendError == EWOULDBLOCK ||
+      sendError == EINTR) {
+    return;
+  }
+
+  closeProtocolClient();
+}
+
+bool ESPNetworkSerialTCP::stageSecureRecord(const uint8_t *buffer,
+                                            size_t size) {
+  if (!_secureMode || buffer == nullptr || size == 0 ||
+      size > ESPNETWORKSERIAL_SECURE_MAX_RECORD ||
+      _txSequence == UINT64_MAX || pendingTxBytes() != 0) {
+    return false;
+  }
+
+  uint8_t *header = _txPending;
+  uint8_t *ciphertext = _txPending + ESPNETWORKSERIAL_SECURE_HEADER_SIZE;
+  uint8_t *tag = ciphertext + size;
+
   header[0] = static_cast<uint8_t>((size >> 8) & 0xFF);
   header[1] = static_cast<uint8_t>(size & 0xFF);
   writeUint64BE(header + 2, _txSequence);
 
   uint8_t nonce[12];
   makeSecureNonce(_txNoncePrefix, _txSequence, nonce);
-
-  uint8_t ciphertext[ESPNETWORKSERIAL_SECURE_MAX_RECORD];
-  uint8_t tag[ESPNETWORKSERIAL_SECURE_TAG_SIZE];
 
   mbedtls_gcm_context context;
   mbedtls_gcm_init(&context);
@@ -972,18 +1104,20 @@ bool ESPNetworkSerialTCP::writeSecureRecord(const uint8_t *buffer, size_t size) 
   if (result == 0) {
     result = mbedtls_gcm_crypt_and_tag(
         &context, MBEDTLS_GCM_ENCRYPT, size, nonce, sizeof(nonce), header,
-        sizeof(header), buffer, ciphertext, sizeof(tag), tag);
+        ESPNETWORKSERIAL_SECURE_HEADER_SIZE, buffer, ciphertext,
+        ESPNETWORKSERIAL_SECURE_TAG_SIZE, tag);
   }
 
   mbedtls_gcm_free(&context);
 
-  if (result != 0 ||
-      !writeClientAll(header, sizeof(header)) ||
-      !writeClientAll(ciphertext, size) ||
-      !writeClientAll(tag, sizeof(tag))) {
+  if (result != 0) {
+    resetTxPending();
     return false;
   }
 
+  _txPendingOffset = 0;
+  _txPendingLength = ESPNETWORKSERIAL_SECURE_HEADER_SIZE + size +
+                     ESPNETWORKSERIAL_SECURE_TAG_SIZE;
   ++_txSequence;
   return true;
 }
@@ -1135,6 +1269,10 @@ void ESPNetworkSerialTCP::handle() {
     handleSecureRx();
   }
 
+  if (_client && _client.connected() && _protocolReady) {
+    drainTxPending();
+  }
+
 #if defined(ESP_ARDUINO_VERSION_MAJOR) && ESP_ARDUINO_VERSION_MAJOR >= 3
   WiFiClient candidate = _server.accept();
 #else
@@ -1224,23 +1362,43 @@ size_t ESPNetworkSerialTCP::write(const uint8_t *buffer, size_t size) {
     return 0;
   }
 
-  if (!_secureMode) {
-    return _client.write(buffer, size);
+  if (pendingTxBytes() != 0) {
+    recordTxDrop(size);
+    return 0;
   }
 
   size_t total = 0;
+
   while (total < size) {
     size_t chunk = size - total;
     if (chunk > ESPNETWORKSERIAL_SECURE_MAX_RECORD) {
       chunk = ESPNETWORKSERIAL_SECURE_MAX_RECORD;
     }
 
-    if (!writeSecureRecord(buffer + total, chunk)) {
-      closeProtocolClient();
-      break;
+    if (_secureMode) {
+      if (!stageSecureRecord(buffer + total, chunk)) {
+        closeProtocolClient();
+        break;
+      }
+    } else {
+      std::memcpy(_txPending, buffer + total, chunk);
+      _txPendingOffset = 0;
+      _txPendingLength = chunk;
     }
 
     total += chunk;
+    drainTxPending();
+
+    if (!_client || !_client.connected() || !_protocolReady) {
+      break;
+    }
+
+    if (pendingTxBytes() != 0) {
+      if (total < size) {
+        recordTxDrop(size - total);
+      }
+      break;
+    }
   }
 
   return total;
@@ -1372,7 +1530,7 @@ int ESPNetworkSerialTCP::peek() {
 }
 
 void ESPNetworkSerialTCP::flush() {
-  if (_client && _client.connected() && _protocolReady) {
-    _client.flush();
-  }
+  // A Stream flush must never turn network backpressure into an application
+  // stall. handle() performs at most one non-blocking send attempt.
+  handle();
 }

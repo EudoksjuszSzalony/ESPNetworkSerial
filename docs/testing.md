@@ -81,7 +81,9 @@ Before a protocol release candidate, validate on a real ESP32:
 - repeated manual reset reconnects;
 - Wi-Fi interruption/recovery reconnects within the grace period;
 - authenticated traffic reports `mode=aes256-gcm`;
-- unauthenticated development mode still reports `mode=raw`.
+- unauthenticated development mode still reports `mode=raw`;
+- a connected host that stops reading cannot stall the sketch, CAN handling, UI work, or ArduinoOTA;
+- TX backpressure leaves at most one bounded pending record and increments the TX drop counters instead of waiting for socket writability.
 
 ## Real-device binary stress harness
 
@@ -219,3 +221,49 @@ The soak test should validate byte-for-byte payload hashes/counters rather than 
 Passing these tests does not constitute a cryptographic audit.
 
 CI can detect implementation regressions, framing errors, concurrency bugs and known failure-path mistakes. It cannot establish that the overall protocol design is suitable for every production threat model.
+
+
+## Non-blocking TX backpressure
+
+Starting with v0.1.2, the ESP32 application TX path does not use
+`WiFiClient.write()`. Both raw and AES-256-GCM sessions stage at most one
+bounded chunk/record and make direct `send(..., MSG_DONTWAIT)` attempts.
+
+A partial TCP send is retained in the pending buffer and continued by later
+`handle()` calls. If the client remains backpressured while new application
+data arrives, the new data is rejected/dropped rather than waiting for socket
+writability. Secure records keep their already-assigned sequence number while
+partially pending; a dropped future write does not consume a sequence number.
+
+The diagnostic API exposes:
+
+~~~cpp
+ESPSerial.droppedTxBytes();
+ESPSerial.droppedTxWrites();
+ESPSerial.pendingTxBytes();
+ESPSerial.clearTxDropCounters();
+~~~
+
+`flush()` is deliberately non-blocking. It performs normal service work and
+at most one immediate TX drain attempt; it does not wait for the pending buffer
+to become empty.
+
+### Hardware backpressure test
+
+For a real-device validation, connect an authenticated client and deliberately
+stop reading from its TCP socket while the ESP32 continues producing logs.
+Verify that:
+
+- the application loop and time-critical work continue without multi-second
+  stalls;
+- ArduinoOTA remains responsive;
+- `pendingTxBytes()` remains bounded to one wire record;
+- `droppedTxBytes()` / `droppedTxWrites()` increase once backpressure
+  reaches the ESP32;
+- resuming reads allows the already-pending record to drain without corrupting
+  the ESPNS record sequence;
+- reconnecting establishes a fresh secure session normally.
+
+This test complements the throughput-oriented StressEcho tests: the expected
+behavior under an intentionally slow consumer is data loss with diagnostics,
+not application blocking.
