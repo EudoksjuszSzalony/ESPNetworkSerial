@@ -290,7 +290,7 @@ GitHub Wiki can provide the friendly how-to layer, while `docs/` remains the ver
 - [x] First tagged public release (`v0.1.0`)
 - [ ] Arduino Library Manager registration
 - [x] Linux/macOS terminal setup implementation + CI
-- [ ] Linux/macOS end-to-end installer validation on native user machines
+- [x] Linux/macOS native CI validation; dedicated user-machine validation deferred to community feedback
 - [x] Host monitor Go tests + cross-platform CI build workflow
 - [x] Automated tagged multi-platform release builds + SHA-256 checksums
 - [ ] Windows/macOS code signing and notarization
