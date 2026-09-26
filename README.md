@@ -148,6 +148,8 @@ no key -> auth=none / mode=raw
 
 Define `ESPNS_DISABLE_DEFAULT_AUTH_KEY` before including `ESPNetworkSerial.h` to deliberately ignore the machine-local default. A sketch-specific `ESPNS_AUTH_KEY` always takes priority over the generated default.
 
+Compile-time overrides are sketch-local, so `ESPNS_AUTH_KEY` and `ESPNS_DISABLE_DEFAULT_AUTH_KEY` must be defined **before** `#include <ESPNetworkSerial.h>`. The bundled examples include `secrets.h` first for exactly this reason.
+
 Repair operations reuse the existing host key. Key regeneration is an explicit operation because rotating it requires previously compiled ESP32 firmware to be rebuilt/reflashed.
 
 ## Optional authentication

@@ -128,7 +128,7 @@ ESPNS_DEFAULT_AUTH_KEY
 no key
 ~~~
 
-Define `ESPNS_DISABLE_DEFAULT_AUTH_KEY` to deliberately ignore the machine-local default.
+Define `ESPNS_DISABLE_DEFAULT_AUTH_KEY` to deliberately ignore the machine-local default. Sketch-local `ESPNS_AUTH_KEY` / `ESPNS_DISABLE_DEFAULT_AUTH_KEY` definitions must appear before `#include <ESPNetworkSerial.h>`.
 
 ## Repair
 

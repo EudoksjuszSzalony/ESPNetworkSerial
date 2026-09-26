@@ -57,6 +57,8 @@ with:
 
 If `config.json` already exists, Repair/upgrade preserves it. An existing config with an empty `authKey` is treated as an intentional request to leave authentication disabled; Setup does not silently replace it.
 
+Sketch-local `ESPNS_AUTH_KEY` / `ESPNS_DISABLE_DEFAULT_AUTH_KEY` definitions must appear before `#include <ESPNetworkSerial.h>`.
+
 ## Core updates
 
 Arduino installs each ESP32 core version in its own directory. Installing a new ESP32 core version after ESPNetworkSerial therefore requires one repair step:
@@ -68,6 +70,17 @@ Start menu
 ~~~
 
 The repair operation is idempotent and can be run repeatedly. It also propagates the existing host key into newly installed ESP32 core versions. Repair never rotates a valid existing key.
+
+## Explicit key rotation
+
+The Start menu contains:
+
+~~~text
+ESPNetworkSerial
+  -> Regenerate ESPNS authentication key
+~~~
+
+This operation displays a warning and requires confirmation. It generates a new host key and propagates it to detected ESP32 core config headers. Previously compiled ESP32 firmware still contains the old key and must be recompiled/reflashed.
 
 ## Existing network pluggable monitor
 

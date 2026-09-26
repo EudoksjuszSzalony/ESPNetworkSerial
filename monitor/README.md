@@ -37,7 +37,7 @@ End-user Setup uses provisioning commands instead:
 
 `--provision-auth` creates a random 256-bit key only when no config exists. Repair therefore reuses the existing key. `--regenerate-auth` deliberately rotates it. `--write-firmware-config` copies the persistent host key into an installer-managed firmware header as `ESPNS_DEFAULT_AUTH_KEY` without printing the key to the terminal.
 
-A sketch-defined `ESPNS_AUTH_KEY` or a programmatic `setAuthKey(...)` can override the installer-provisioned default.
+A sketch-defined `ESPNS_AUTH_KEY` or a programmatic `setAuthKey(...)` can override the installer-provisioned default. Sketch-local compile-time macros must be defined before `#include <ESPNetworkSerial.h>`.
 
 When a host key is configured, an `auth=none` endpoint is rejected by default to avoid silent downgrade. `allowUnauthenticated=true` can deliberately relax that behavior for mixed development environments.
 

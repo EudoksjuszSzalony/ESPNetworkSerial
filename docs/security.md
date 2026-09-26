@@ -175,7 +175,9 @@ ESPNS_AUTH_KEY
 ESPNS_DEFAULT_AUTH_KEY
 ~~~
 
-`ESPNS_DISABLE_DEFAULT_AUTH_KEY` disables only the installer-provided default. The key is still compiled into firmware and should be considered recoverable by anyone able to read unprotected flash.
+`ESPNS_DISABLE_DEFAULT_AUTH_KEY` disables only the installer-provided default. Sketch-local `ESPNS_AUTH_KEY` / `ESPNS_DISABLE_DEFAULT_AUTH_KEY` definitions must appear before `#include <ESPNetworkSerial.h>` so the library can register the override before `setup()`.
+
+The key is still compiled into firmware and should be considered recoverable by anyone able to read unprotected flash.
 
 ### Host
 
