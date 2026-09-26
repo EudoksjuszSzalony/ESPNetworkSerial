@@ -39,10 +39,12 @@ Source: "payload\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "payload\config.example.json"; DestDir: "{app}"; Flags: ignoreversion
 Source: "register-arduino.ps1"; DestDir: "{app}\tools"; Flags: ignoreversion
 Source: "unregister-arduino.ps1"; DestDir: "{app}\tools"; Flags: ignoreversion
+Source: "rotate-auth.ps1"; DestDir: "{app}\tools"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\Open ESPNetworkSerial folder"; Filename: "{sys}\explorer.exe"; Parameters: """{app}"""
 Name: "{group}\Repair Arduino integration"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\tools\register-arduino.ps1"" -MonitorPath ""{app}\{#MyAppExeName}"""
+Name: "{group}\Regenerate ESPNS authentication key"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\tools\rotate-auth.ps1"" -MonitorPath ""{app}\{#MyAppExeName}"" -RegisterScriptPath ""{app}\tools\register-arduino.ps1"""
 Name: "{group}\Uninstall ESPNetworkSerial"; Filename: "{uninstallexe}"
 
 [UninstallRun]

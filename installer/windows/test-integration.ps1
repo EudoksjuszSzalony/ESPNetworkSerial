@@ -68,6 +68,16 @@ some.legacy.setting=1
     $platform = Get-Content -LiteralPath (Join-Path $core "platform.local.txt") -Raw
     Assert-True (($platform | Select-String -Pattern "# ESPNetworkSerial BEGIN" -AllMatches).Matches.Count -eq 1) "idempotent registration must not duplicate the block"
 
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$PSScriptRoot\rotate-auth.ps1" -MonitorPath $monitor -RegisterScriptPath "$PSScriptRoot\register-arduino.ps1" -Force
+    Assert-True ($LASTEXITCODE -eq 0) "explicit key rotation should succeed"
+
+    $cfgAfterRotation = Get-Content -LiteralPath $config -Raw | ConvertFrom-Json
+    $rotatedKey = [string]$cfgAfterRotation.authKey
+    Assert-True ($rotatedKey -ne $firstKey) "key rotation must generate a new key"
+    $firmwareTextAfterRotation = Get-Content -LiteralPath $firmwareConfig -Raw
+    $expectedRotatedDefine = '#define ESPNS_DEFAULT_AUTH_KEY "' + $rotatedKey + '"'
+    Assert-True ($firmwareTextAfterRotation -match [regex]::Escape($expectedRotatedDefine)) "firmware header should receive the rotated key"
+
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$PSScriptRoot\unregister-arduino.ps1" -ArduinoDataRoot $arduinoRoot
     Assert-True ($LASTEXITCODE -eq 0) "unregister should succeed"
 
