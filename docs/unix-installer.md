@@ -1,6 +1,6 @@
 # Linux and macOS Terminal Setup
 
-> Status: implemented on the v0.1.1 development line and covered by native Linux/macOS CI. End-to-end validation on user machines is still recommended before the next public tag.
+> Status: implemented on the v0.1.1 development line and covered by native Linux/macOS CI, including install, Repair, key rotation, conflict handling and uninstall. Dedicated user-machine validation is deferred; platform-specific issues can be handled from community reports.
 
 The Linux/macOS setup packages provide the same core integration model as the Windows installer without requiring a graphical installer.
 
