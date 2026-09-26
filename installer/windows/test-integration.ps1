@@ -68,7 +68,7 @@ some.legacy.setting=1
     $platform = Get-Content -LiteralPath (Join-Path $core "platform.local.txt") -Raw
     Assert-True (($platform | Select-String -Pattern "# ESPNetworkSerial BEGIN" -AllMatches).Matches.Count -eq 1) "idempotent registration must not duplicate the block"
 
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$PSScriptRoot\rotate-auth.ps1" -MonitorPath $monitor -RegisterScriptPath "$PSScriptRoot\register-arduino.ps1" -Force
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$PSScriptRoot\rotate-auth.ps1" -MonitorPath $monitor -RegisterScriptPath "$PSScriptRoot\register-arduino.ps1" -ArduinoDataRoot $arduinoRoot -Force
     Assert-True ($LASTEXITCODE -eq 0) "explicit key rotation should succeed"
 
     $cfgAfterRotation = Get-Content -LiteralPath $config -Raw | ConvertFrom-Json
