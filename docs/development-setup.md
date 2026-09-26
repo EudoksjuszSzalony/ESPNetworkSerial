@@ -4,6 +4,39 @@
 
 This setup lets Arduino IDE use `ESPNetworkSerialMonitor` for ports whose protocol is `network`.
 
+
+## PowerShell repository helper
+
+If Git is installed only through GitHub Desktop and is therefore not available as a normal `git` command, run:
+
+~~~powershell
+.\tools\Enter-ESPNetworkSerial.ps1
+~~~
+
+The helper:
+
+- finds `git.exe` from PATH, a normal Git for Windows installation, or GitHub Desktop;
+- changes the current directory to the ESPNetworkSerial repository automatically;
+- defines a normal `git` command for the current PowerShell session;
+- defines `espns-repo` as a quick way to jump back to the repository.
+
+After that, ordinary commands work:
+
+~~~powershell
+git status
+git fetch origin
+git tag -a v0.1.1 <commit> -m "ESPNetworkSerial v0.1.1"
+git push origin v0.1.1
+~~~
+
+When invoking an executable path stored directly in a PowerShell variable, use the call operator:
+
+~~~powershell
+& $git status
+~~~
+
+PowerShell does **not** interpret `$git status` as executing the path stored in `$git`.
+
 ## 1. Build the host monitor
 
 From PowerShell in the repository:
