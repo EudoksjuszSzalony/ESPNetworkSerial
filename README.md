@@ -4,7 +4,63 @@
 
 ESPNetworkSerial aims to make network serial feel like ordinary Arduino Serial: select your ESP32 network port, open Serial Monitor, and communicate bidirectionally over Wi-Fi — while keeping OTA available on the same device.
 
-> **Status:** v0.1.0 is publicly released. The current v0.1.1 development line adds cross-platform setup packages and automatic machine-local authentication provisioning. Arduino Library Manager registration is planned after the new installers are validated.
+> **Status:** v0.1.0 is publicly released. v0.1.1 is the current release candidate, adding cross-platform setup packages and automatic machine-local authentication provisioning. Arduino Library Manager registration follows the v0.1.1 release.
+
+## Installation
+
+ESPNetworkSerial has **two parts**:
+
+1. the Arduino library used by your ESP32 sketch;
+2. the companion host monitor that integrates the wireless port with Arduino IDE.
+
+### 1. Install the Arduino library
+
+Once ESPNetworkSerial is indexed by Arduino Library Manager:
+
+~~~text
+Arduino IDE
+  -> Library Manager
+  -> search: ESPNetworkSerial
+  -> Install
+~~~
+
+Until then, the library can be installed from this repository in the usual Arduino development workflow.
+
+### 2. Install the companion host setup
+
+Download the setup package for your operating system from the latest GitHub Release and run it **once per computer**:
+
+~~~text
+Windows     espnetworkserial-setup-<version>-windows-amd64.exe
+Linux x64   espnetworkserial-setup-<version>-linux-amd64.tar.gz
+Linux ARM64 espnetworkserial-setup-<version>-linux-arm64.tar.gz
+macOS Intel espnetworkserial-setup-<version>-macos-amd64.tar.gz
+macOS Apple Silicon
+            espnetworkserial-setup-<version>-macos-arm64.tar.gz
+~~~
+
+The setup installs the host monitor, registers it with detected ESP32 Arduino cores, and provisions the default ESPNS authentication key automatically. Linux/macOS packages use a terminal installer; Windows uses the graphical installer.
+
+After setup:
+
+~~~text
+Restart Arduino IDE
+-> select the ESP32 network port
+-> open Serial Monitor
+~~~
+
+Normal sketches then only need:
+
+~~~cpp
+#include <ESPNetworkSerial.h>
+
+void setup() {
+    // Connect Wi-Fi first...
+    ESPSerial.begin();
+}
+~~~
+
+The companion setup is required for Arduino IDE network Serial Monitor integration; installing only the Arduino library does not install a host executable into the IDE.
 
 ## Why
 
