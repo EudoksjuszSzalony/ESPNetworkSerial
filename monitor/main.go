@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
@@ -539,6 +540,39 @@ func normalizeBoardAddress(boardPort string) (string, error) {
 	return net.JoinHostPort(boardPort, defaultDevicePort), nil
 }
 
+func otaUpload(espotaPath, ip, port, firmwarePath string, auth authSettings) error {
+	if strings.TrimSpace(espotaPath) == "" {
+		return errors.New("OTA uploader path is empty")
+	}
+	if strings.TrimSpace(ip) == "" {
+		return errors.New("OTA target IP is empty")
+	}
+	if strings.TrimSpace(port) == "" {
+		return errors.New("OTA target port is empty")
+	}
+	if strings.TrimSpace(firmwarePath) == "" {
+		return errors.New("OTA firmware path is empty")
+	}
+	if !auth.enabled() {
+		return errors.New("secure OTA requires an ESPNS auth key in config.json")
+	}
+
+	args := []string{
+		"-i", ip,
+		"-p", port,
+		"--auth=" + string(auth.key),
+		"-f", firmwarePath,
+	}
+	cmd := exec.Command(espotaPath, args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("OTA uploader failed: %w", err)
+	}
+	return nil
+}
+
 func directMode(target string, auth authSettings) error {
 	address, err := normalizeBoardAddress(target)
 	if err != nil {
@@ -587,6 +621,11 @@ func main() {
 	stressPause := flag.Duration("stress-pause", 0, "pause between completed stress cycles")
 	stressRecover := flag.Bool("stress-recover", false, "recover after a broken stress session by reconnecting and starting that cycle again")
 	stressRecoverTimeout := flag.Duration("stress-recover-timeout", 30*time.Second, "maximum time to wait for ESP32 recovery when --stress-recover is enabled")
+	otaMode := flag.Bool("ota-upload", false, "run the ESP32 OTA uploader using the auth key from ESPNS config.json")
+	otaEspota := flag.String("espota", "", "path to espota executable for --ota-upload")
+	otaIP := flag.String("ip", "", "target IP address for --ota-upload")
+	otaPort := flag.String("port", "", "target OTA port for --ota-upload")
+	otaFile := flag.String("file", "", "firmware binary path for --ota-upload")
 	flag.Parse()
 
 	if *showVersion {
@@ -620,6 +659,14 @@ func main() {
 	}
 	if auth.enabled() {
 		fmt.Fprintf(os.Stderr, "%s: hmac-sha256 authentication configured from %s\n", monitorName, auth.source)
+	}
+
+	if *otaMode {
+		if err := otaUpload(*otaEspota, *otaIP, *otaPort, *otaFile, auth); err != nil {
+			fmt.Fprintln(os.Stderr, "OTA upload error:", err)
+			os.Exit(1)
+		}
+		return
 	}
 
 	if *stressTarget != "" {
