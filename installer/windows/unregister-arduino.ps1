@@ -8,6 +8,8 @@ $platformBeginMarker = "# ESPNetworkSerial BEGIN"
 $platformEndMarker = "# ESPNetworkSerial END"
 $legacyBoardsBeginMarker = "# ESPNetworkSerial PROMPTLESS OTA BEGIN"
 $legacyBoardsEndMarker = "# ESPNetworkSerial PROMPTLESS OTA END"
+$secureOtaBoardsBeginMarker = "# ESPNetworkSerial SECURE OTA BEGIN"
+$secureOtaBoardsEndMarker = "# ESPNetworkSerial SECURE OTA END"
 $managedFirmwareConfigMarker = "// ESPNetworkSerial installer-managed configuration"
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 
@@ -49,6 +51,7 @@ $versions = @(Get-ChildItem -LiteralPath $coreRoot -Directory | Sort-Object Name
 foreach ($version in $versions) {
     Remove-ManagedFileBlock -Path (Join-Path $version.FullName "platform.local.txt") -BeginMarker $platformBeginMarker -EndMarker $platformEndMarker
     Remove-ManagedFileBlock -Path (Join-Path $version.FullName "boards.local.txt") -BeginMarker $legacyBoardsBeginMarker -EndMarker $legacyBoardsEndMarker
+    Remove-ManagedFileBlock -Path (Join-Path $version.FullName "boards.local.txt") -BeginMarker $secureOtaBoardsBeginMarker -EndMarker $secureOtaBoardsEndMarker
     Remove-ManagedFirmwareConfig -Path (Join-Path $version.FullName "cores\esp32\ESPNetworkSerialConfig.h")
 }
 
