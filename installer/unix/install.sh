@@ -182,10 +182,15 @@ if [ "$CORE_COUNT" -gt 0 ]; then
 
     if [ "$result" -eq 0 ]; then
       CONFIGURED=$((CONFIGURED + 1))
-      espns_ok "ESP32 core $version configured"
+      espns_ok "ESP32 core $version configured (monitor + secure promptless OTA)"
     elif [ "$result" -eq 2 ]; then
       CONFLICTS=$((CONFLICTS + 1))
       espns_warn "ESP32 core $version already has another pluggable network monitor; recipe left untouched."
+    elif [ "$result" -eq 3 ]; then
+      CONFLICTS=$((CONFLICTS + 1))
+      espns_warn "ESP32 core $version already has another network upload-tool override; secure OTA recipe left untouched."
+    elif [ "$result" -eq 4 ]; then
+      espns_warn "ESP32 core $version has no usable boards.txt; secure OTA recipe could not be registered."
     else
       espns_die "Could not configure ESP32 core $version."
     fi
@@ -203,7 +208,7 @@ espns_step 6 6 "Verifying installation"
   printf 'Host config: %s\n' "$CONFIG_PATH"
   printf 'Arduino data root: %s\n' "$ARDUINO_ROOT"
   printf 'ESP32 cores found: %s\n' "$CORE_COUNT"
-  printf 'Monitor recipes configured: %s\n' "$CONFIGURED"
+  printf 'Monitor + secure OTA recipes configured: %s\n' "$CONFIGURED"
   printf 'Monitor conflicts: %s\n' "$CONFLICTS"
   printf 'Firmware auth configs: %s\n' "$FIRMWARE_CONFIGS"
 } > "$STATUS_PATH"
@@ -214,11 +219,11 @@ chmod 600 "$STATUS_PATH" 2>/dev/null || true
 espns_ok "Monitor executable OK"
 espns_ok "Authentication configuration OK"
 if [ "$CORE_COUNT" -gt 0 ] && [ "$CONFIGURED" -gt 0 ]; then
-  espns_ok "Arduino network monitor integration OK"
+  espns_ok "Arduino network monitor + secure promptless OTA integration OK"
 fi
 
 printf '\n%sESPNetworkSerial is ready.%s\n' "$ESPNS_BOLD" "$ESPNS_RESET"
-printf 'Restart Arduino IDE before using the network Serial Monitor.\n'
+printf 'Restart Arduino IDE before using the network Serial Monitor or OTA upload.\n'
 printf 'Repair command: "%s/install.sh" --repair\n' "$APP_DIR"
 printf 'Uninstall command: "%s/uninstall.sh"\n\n' "$APP_DIR"
 
