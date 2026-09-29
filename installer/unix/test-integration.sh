@@ -26,6 +26,10 @@ cat > "$CORE/boards.local.txt" <<'EOF'
 some.legacy.setting=1
 # ESPNetworkSerial PROMPTLESS OTA END
 EOF
+cat > "$CORE/boards.txt" <<'EOF'
+esp32.name=ESP32 Dev Module
+featheresp32.name=Adafruit ESP32 Feather
+EOF
 
 bash "$SCRIPT_DIR/install.sh"
 
@@ -41,7 +45,14 @@ grep -Fq 'compiler.warning_flags=-Wall' "$CORE/platform.local.txt" ||
   fail "unrelated platform content lost"
 [ "$(grep -Fc '# ESPNetworkSerial BEGIN' "$CORE/platform.local.txt")" -eq 1 ] ||
   fail "managed block should occur once"
-[ ! -f "$CORE/boards.local.txt" ] || fail "empty legacy boards.local should be removed"
+grep -Fq 'tools.espns_ota.upload.pattern=' "$CORE/platform.local.txt" ||
+  fail "secure OTA upload recipe missing"
+! grep -Fq 'upload.field.password' "$CORE/platform.local.txt" ||
+  fail "secure OTA recipe must not request an IDE password"
+grep -Fq 'esp32.upload.tool.network=espns_ota' "$CORE/boards.local.txt" ||
+  fail "ESP32 board secure OTA override missing"
+grep -Fq 'featheresp32.upload.tool.network=espns_ota' "$CORE/boards.local.txt" ||
+  fail "Feather board secure OTA override missing"
 
 cp "$ESPNS_INSTALL_ROOT/config.json" "$ROOT/config.before-repair"
 bash "$ESPNS_INSTALL_ROOT/install.sh" --repair
