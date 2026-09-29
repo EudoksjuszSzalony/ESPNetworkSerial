@@ -208,6 +208,34 @@ Compile-time overrides are sketch-local, so `ESPNS_AUTH_KEY` and `ESPNS_DISABLE_
 
 Repair operations reuse the existing host key. Key regeneration is an explicit operation because rotating it requires previously compiled ESP32 firmware to be rebuilt/reflashed.
 
+### Secure OTA without an Arduino IDE password prompt
+
+Setup also registers an ESPNS-managed network upload tool for detected ESP32 Arduino cores. The upload wrapper reads the same `authKey` from the installed `config.json` and passes it to the ESP32 OTA uploader automatically.
+
+For sketches that configure ArduinoOTA with the provisioned key:
+
+~~~cpp
+ArduinoOTA.setPassword(ESPNS_DEFAULT_AUTH_KEY);
+~~~
+
+the normal workflow becomes:
+
+~~~text
+select ESP32 network port
+-> Upload
+-> authenticated OTA starts immediately
+~~~
+
+Arduino IDE does not show a password field because the ESPNS upload recipe does not declare `upload.field.password`. The key is not copied into the sketch by hand; Setup remains the provisioning bridge:
+
+~~~text
+config.json
+   +-> host ESPNS monitor / OTA wrapper
+   +-> ESPNetworkSerialConfig.h -> ESPNS_DEFAULT_AUTH_KEY -> firmware
+~~~
+
+**Scope limitation:** Arduino selects the network upload tool at ESP32-core/board level, not per sketch. While the ESPNS integration is installed, network uploads for that patched ESP32 core are expected to use the ESPNS-provisioned key. A sketch using a different ArduinoOTA password will fail authentication rather than falling back to an IDE prompt.
+
 ## Optional authentication
 
 
@@ -294,7 +322,7 @@ The Arduino library metadata and `src/` directory live at the repository root so
 
 The development checkout can already appear under **File -> Examples** and **Sketch -> Include Library** because Arduino scans locally installed libraries. It is not expected to appear in the sidebar **Library Manager** catalog yet: that catalog is populated from Arduino's Library Manager registry/index.
 
-ESPNetworkSerial v0.1.1 is tagged and publicly released. The Arduino Library Manager registration PR was accepted and merged; Arduino's indexer will publish the library to the Library Manager catalog after propagation.
+ESPNetworkSerial v0.1.2 is tagged and publicly released. The Arduino Library Manager registration PR was accepted and merged; Arduino's indexer will publish the library to the Library Manager catalog after propagation.
 
 ## Documentation
 
