@@ -146,6 +146,7 @@ try {
         $recipeLine = [string]::Format('pluggable_monitor.pattern.network="{0}"', $recipePath)
         $otaToolLines = @(
             [string]::Format('tools.espns_ota.cmd="{0}"', $recipePath),
+            [string]::Format('tools.espns_ota.cmd.windows="{0}"', $recipePath),
             'tools.espns_ota.upload.protocol=network',
             'tools.espns_ota.upload.params.verbose=',
             'tools.espns_ota.upload.params.quiet=',
