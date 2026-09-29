@@ -47,6 +47,15 @@ void setup() {
   ArduinoOTA.setHostname(OTA_HOSTNAME);
   ArduinoOTA.setTimeout(OTA_TIMEOUT_MS);
 
+  // Setup-managed secure OTA: use the same high-entropy key that the host
+  // wrapper reads from config.json. This removes the need to type an OTA
+  // password in Arduino IDE while keeping the upload authenticated.
+#if defined(ESPNS_AUTH_KEY)
+  ArduinoOTA.setPassword(ESPNS_AUTH_KEY);
+#elif defined(ESPNS_DEFAULT_AUTH_KEY) && !defined(ESPNS_DISABLE_DEFAULT_AUTH_KEY)
+  ArduinoOTA.setPassword(ESPNS_DEFAULT_AUTH_KEY);
+#endif
+
   // Intentional exception: OTA diagnostics stay local on Serial so an OTA
   // transfer does not create extra traffic on the Wi-Fi monitor connection.
   // Serial is already initialized by ESPSerial.begin().
