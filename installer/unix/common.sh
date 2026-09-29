@@ -186,7 +186,7 @@ espns_configure_platform_file() {
   fi
 
   [ -f "$boards_path" ] || return 4
-  board_ids="$(sed -n 's/^\([^.[:space:]=][^.:space:]=*\)\.name=.*/\1/p' "$boards_path" | sort -u)"
+  board_ids="$(sed -n 's/^\([^.[:space:]=][^.[:space:]=]*\)\.name=.*/\1/p' "$boards_path" | sort -u)"
   if [ -z "$board_ids" ]; then
     return 4
   fi
