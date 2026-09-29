@@ -46,6 +46,16 @@ End-user Setup can also provision this automatically. If no host `config.json` e
 
 Repair reuses the existing key. Rotation is explicit because firmware compiled before the rotation still contains the old PSK.
 
+### ArduinoOTA integration
+
+ESPNetworkSerial Setup can intentionally reuse the provisioned PSK as the ArduinoOTA password. The host-side OTA wrapper reads the key from `config.json`; firmware receives the same value through the installer-managed `ESPNetworkSerialConfig.h`.
+
+This produces a single machine-provisioned trust domain for ESPNS and ArduinoOTA. It is simpler operationally than maintaining two copied secrets, but compromise of the shared PSK compromises both services.
+
+The wrapper passes the password to the standard ESP32 OTA uploader as a process argument, matching the ESP32 uploader's existing `--auth` interface. On systems where other users can inspect process command lines, the key may therefore be observable for the duration of an upload. Protect the host account accordingly.
+
+The ESPNS installer removes the Arduino IDE password field from its managed upload recipe, so the password is never typed into the IDE prompt. A sketch must still explicitly configure ArduinoOTA with the same provisioned key; ESPNetworkSerial does not silently modify ArduinoOTA at runtime.
+
 ## Mutual authentication
 
 The host and ESP32 each generate a fresh 128-bit random nonce for every TCP connection.
