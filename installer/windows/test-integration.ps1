@@ -36,6 +36,10 @@ some.legacy.setting=1
 # ESPNetworkSerial PROMPTLESS OTA END
 "@
     Set-Content -LiteralPath (Join-Path $core "boards.local.txt") -Value $legacyBoards
+    Set-Content -LiteralPath (Join-Path $core "boards.txt") -Value @(
+        "esp32.name=ESP32 Dev Module",
+        "featheresp32.name=Adafruit ESP32 Feather"
+    )
 
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$PSScriptRoot\register-arduino.ps1" -MonitorPath $monitor -ArduinoDataRoot $arduinoRoot -StatusPath $status -ConfigPath $config
     Assert-True ($LASTEXITCODE -eq 0) "first registration should succeed"
@@ -57,7 +61,11 @@ some.legacy.setting=1
     Assert-True (($platform | Select-String -Pattern "# ESPNetworkSerial BEGIN" -AllMatches).Matches.Count -eq 1) "managed block should occur once"
     Assert-True ($platform -match "compiler\.warning_flags=-Wall") "unrelated platform.local content must be preserved"
     Assert-True ($platform -match "pluggable_monitor\.pattern\.network=") "network monitor recipe should exist"
-    Assert-True (-not (Test-Path -LiteralPath (Join-Path $core "boards.local.txt"))) "empty legacy boards.local should be removed"
+    Assert-True ($platform -match "tools\.espns_ota\.upload\.pattern=") "secure OTA upload recipe should exist"
+    Assert-True (-not ($platform -match "upload\.field\.password")) "secure OTA recipe must not request an IDE password field"
+    $boardsLocal = Get-Content -LiteralPath (Join-Path $core "boards.local.txt") -Raw
+    Assert-True ($boardsLocal -match "esp32\.upload\.tool\.network=espns_ota") "ESP32 board should use the ESPNS OTA wrapper"
+    Assert-True ($boardsLocal -match "featheresp32\.upload\.tool\.network=espns_ota") "Feather board should use the ESPNS OTA wrapper"
 
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$PSScriptRoot\register-arduino.ps1" -MonitorPath $monitor -ArduinoDataRoot $arduinoRoot -StatusPath $status -ConfigPath $config
     Assert-True ($LASTEXITCODE -eq 0) "second registration should be idempotent"
@@ -84,6 +92,7 @@ some.legacy.setting=1
     $platform = Get-Content -LiteralPath (Join-Path $core "platform.local.txt") -Raw
     Assert-True (-not ($platform -match [regex]::Escape("# ESPNetworkSerial BEGIN"))) "managed block should be removed"
     Assert-True ($platform -match "compiler\.warning_flags=-Wall") "unregister must preserve unrelated content"
+    Assert-True (-not (Test-Path -LiteralPath (Join-Path $core "boards.local.txt"))) "unregister should remove the secure OTA board override"
     Assert-True (-not (Test-Path -LiteralPath $firmwareConfig)) "unregister should remove the managed firmware auth header"
 
     $conflictCore = Join-Path $arduinoRoot "packages\esp32\hardware\esp32\3.4.0"
