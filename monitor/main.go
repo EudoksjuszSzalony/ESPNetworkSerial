@@ -540,7 +540,7 @@ func normalizeBoardAddress(boardPort string) (string, error) {
 	return net.JoinHostPort(boardPort, defaultDevicePort), nil
 }
 
-func otaUpload(espotaPath, ip, port, firmwarePath string, auth authSettings) error {
+func otaUpload(espotaPath, espotaInterpreter, ip, port, firmwarePath string, auth authSettings) error {
 	if strings.TrimSpace(espotaPath) == "" {
 		return errors.New("OTA uploader path is empty")
 	}
@@ -563,7 +563,12 @@ func otaUpload(espotaPath, ip, port, firmwarePath string, auth authSettings) err
 		"--auth=" + string(auth.key),
 		"-f", firmwarePath,
 	}
-	cmd := exec.Command(espotaPath, args...)
+	commandPath := espotaPath
+	if strings.TrimSpace(espotaInterpreter) != "" {
+		args = append([]string{espotaPath}, args...)
+		commandPath = espotaInterpreter
+	}
+	cmd := exec.Command(commandPath, args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
@@ -622,7 +627,8 @@ func main() {
 	stressRecover := flag.Bool("stress-recover", false, "recover after a broken stress session by reconnecting and starting that cycle again")
 	stressRecoverTimeout := flag.Duration("stress-recover-timeout", 30*time.Second, "maximum time to wait for ESP32 recovery when --stress-recover is enabled")
 	otaMode := flag.Bool("ota-upload", false, "run the ESP32 OTA uploader using the auth key from ESPNS config.json")
-	otaEspota := flag.String("espota", "", "path to espota executable for --ota-upload")
+	otaEspota := flag.String("espota", "", "path to espota executable/script for --ota-upload")
+	otaEspotaInterpreter := flag.String("espota-interpreter", "", "optional interpreter used to launch the espota script")
 	otaIP := flag.String("ip", "", "target IP address for --ota-upload")
 	otaPort := flag.String("port", "", "target OTA port for --ota-upload")
 	otaFile := flag.String("file", "", "firmware binary path for --ota-upload")
@@ -662,7 +668,7 @@ func main() {
 	}
 
 	if *otaMode {
-		if err := otaUpload(*otaEspota, *otaIP, *otaPort, *otaFile, auth); err != nil {
+		if err := otaUpload(*otaEspota, *otaEspotaInterpreter, *otaIP, *otaPort, *otaFile, auth); err != nil {
 			fmt.Fprintln(os.Stderr, "OTA upload error:", err)
 			os.Exit(1)
 		}
