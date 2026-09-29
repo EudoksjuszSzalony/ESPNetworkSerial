@@ -4,6 +4,8 @@ ESPNS_PLATFORM_BEGIN="# ESPNetworkSerial BEGIN"
 ESPNS_PLATFORM_END="# ESPNetworkSerial END"
 ESPNS_LEGACY_BOARDS_BEGIN="# ESPNetworkSerial PROMPTLESS OTA BEGIN"
 ESPNS_LEGACY_BOARDS_END="# ESPNetworkSerial PROMPTLESS OTA END"
+ESPNS_SECURE_OTA_BOARDS_BEGIN="# ESPNetworkSerial SECURE OTA BEGIN"
+ESPNS_SECURE_OTA_BOARDS_END="# ESPNetworkSerial SECURE OTA END"
 ESPNS_FIRMWARE_MARKER="// ESPNetworkSerial installer-managed configuration"
 
 espns_init_terminal() {
@@ -149,11 +151,12 @@ espns_strip_managed_block() {
 }
 
 espns_configure_platform_file() {
-  local core_dir monitor_path platform_file boards_file
+  local core_dir monitor_path platform_file boards_file boards_path board_ids
   core_dir="$1"
   monitor_path="$2"
   platform_file="$core_dir/platform.local.txt"
   boards_file="$core_dir/boards.local.txt"
+  boards_path="$core_dir/boards.txt"
 
   espns_strip_managed_block "$platform_file" "$ESPNS_PLATFORM_BEGIN" "$ESPNS_PLATFORM_END"
 
@@ -167,10 +170,39 @@ espns_configure_platform_file() {
   {
     printf '%s\n' "$ESPNS_PLATFORM_BEGIN"
     printf 'pluggable_monitor.pattern.network="%s"\n' "$monitor_path"
+    printf 'tools.espns_ota.cmd="%s"\n' "$monitor_path"
+    printf 'tools.espns_ota.upload.protocol=network\n'
+    printf 'tools.espns_ota.upload.params.verbose=\n'
+    printf 'tools.espns_ota.upload.params.quiet=\n'
+    printf 'tools.espns_ota.upload.pattern={cmd} --ota-upload --espota "{runtime.platform.path}/tools/espota.py" --espota-interpreter python3 --ip {upload.port.address} --port {upload.port.properties.port} --file "{build.path}/{build.project_name}.bin"\n'
     printf '%s\n' "$ESPNS_PLATFORM_END"
   } >> "$platform_file"
 
   espns_strip_managed_block "$boards_file" "$ESPNS_LEGACY_BOARDS_BEGIN" "$ESPNS_LEGACY_BOARDS_END"
+  espns_strip_managed_block "$boards_file" "$ESPNS_SECURE_OTA_BOARDS_BEGIN" "$ESPNS_SECURE_OTA_BOARDS_END"
+
+  if [ -f "$boards_file" ] && grep -Eq '^[[:space:]]*[^#[:space:]][^=]*\.upload\.tool\.network[[:space:]]*=' "$boards_file"; then
+    return 3
+  fi
+
+  [ -f "$boards_path" ] || return 4
+  board_ids="$(sed -n 's/^\([^.[:space:]=][^.:space:]=*\)\.name=.*/\1/p' "$boards_path" | sort -u)"
+  if [ -z "$board_ids" ]; then
+    return 4
+  fi
+
+  if [ -s "$boards_file" ]; then
+    printf '\n' >> "$boards_file"
+  fi
+  {
+    printf '%s\n' "$ESPNS_SECURE_OTA_BOARDS_BEGIN"
+    while IFS= read -r board_id; do
+      [ -n "$board_id" ] && printf '%s.upload.tool.network=espns_ota\n' "$board_id"
+    done <<EOF
+$board_ids
+EOF
+    printf '%s\n' "$ESPNS_SECURE_OTA_BOARDS_END"
+  } >> "$boards_file"
   return 0
 }
 
@@ -180,6 +212,7 @@ espns_remove_core_integration() {
 
   espns_strip_managed_block "$core_dir/platform.local.txt" "$ESPNS_PLATFORM_BEGIN" "$ESPNS_PLATFORM_END"
   espns_strip_managed_block "$core_dir/boards.local.txt" "$ESPNS_LEGACY_BOARDS_BEGIN" "$ESPNS_LEGACY_BOARDS_END"
+  espns_strip_managed_block "$core_dir/boards.local.txt" "$ESPNS_SECURE_OTA_BOARDS_BEGIN" "$ESPNS_SECURE_OTA_BOARDS_END"
 
   firmware_config="$core_dir/cores/esp32/ESPNetworkSerialConfig.h"
   if [ -f "$firmware_config" ] && grep -Fq "$ESPNS_FIRMWARE_MARKER" "$firmware_config"; then
