@@ -12,6 +12,8 @@ $platformBeginMarker = "# ESPNetworkSerial BEGIN"
 $platformEndMarker = "# ESPNetworkSerial END"
 $legacyBoardsBeginMarker = "# ESPNetworkSerial PROMPTLESS OTA BEGIN"
 $legacyBoardsEndMarker = "# ESPNetworkSerial PROMPTLESS OTA END"
+$secureOtaBoardsBeginMarker = "# ESPNetworkSerial SECURE OTA BEGIN"
+$secureOtaBoardsEndMarker = "# ESPNetworkSerial SECURE OTA END"
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 
 function Remove-ManagedBlock {
@@ -67,6 +69,7 @@ function Invoke-ESPNSMonitor {
 
 $status = New-Object System.Collections.Generic.List[string]
 $configured = New-Object System.Collections.Generic.List[string]
+$otaConfigured = New-Object System.Collections.Generic.List[string]
 $conflicts = New-Object System.Collections.Generic.List[string]
 
 try {
@@ -141,7 +144,15 @@ try {
         }
 
         $recipeLine = [string]::Format('pluggable_monitor.pattern.network="{0}"', $recipePath)
-        $block = @($platformBeginMarker, $recipeLine, $platformEndMarker) -join [Environment]::NewLine
+        $otaToolLines = @(
+            [string]::Format('tools.espns_ota.cmd="{0}"', $recipePath),
+            'tools.espns_ota.upload.protocol=network',
+            'tools.espns_ota.upload.params.verbose=',
+            'tools.espns_ota.upload.params.quiet=',
+            'tools.espns_ota.upload.pattern={cmd} --ota-upload --espota "{runtime.platform.path}\tools\espota.exe" --ip {upload.port.address} --port {upload.port.properties.port} --file "{build.path}/{build.project_name}.bin"'
+        )
+        $block = @($platformBeginMarker, $recipeLine) + $otaToolLines + @($platformEndMarker)
+        $block = $block -join [Environment]::NewLine
 
         if ($platformContent.Length -gt 0) {
             $platformContent = $platformContent + [Environment]::NewLine + [Environment]::NewLine + $block
@@ -151,12 +162,56 @@ try {
         Write-OptionalFile -Path $platformLocalPath -Content $platformContent
 
         $boardsLocalPath = Join-Path $version.FullName "boards.local.txt"
+        $boardsContent = ""
         if (Test-Path -LiteralPath $boardsLocalPath -PathType Leaf) {
             $boardsContent = [System.IO.File]::ReadAllText($boardsLocalPath)
-            $boardsContent = Remove-ManagedBlock -Content $boardsContent -BeginMarker $legacyBoardsBeginMarker -EndMarker $legacyBoardsEndMarker
+        }
+        $boardsContent = Remove-ManagedBlock -Content $boardsContent -BeginMarker $legacyBoardsBeginMarker -EndMarker $legacyBoardsEndMarker
+        $boardsContent = Remove-ManagedBlock -Content $boardsContent -BeginMarker $secureOtaBoardsBeginMarker -EndMarker $secureOtaBoardsEndMarker
+
+        if ($boardsContent -match '(?m)^\s*[^#\s][^=]*\.upload\.tool\.network\s*=') {
+            $conflicts.Add("$($version.Name): existing third-party network upload-tool override")
             Write-OptionalFile -Path $boardsLocalPath -Content $boardsContent
+            continue
         }
 
+        $boardsPath = Join-Path $version.FullName "boards.txt"
+        if (-not (Test-Path -LiteralPath $boardsPath -PathType Leaf)) {
+            $status.Add("$($version.Name): WARNING: boards.txt not found; secure promptless OTA was not registered.")
+            Write-OptionalFile -Path $boardsLocalPath -Content $boardsContent
+            $configured.Add($version.Name)
+            continue
+        }
+
+        $boardIds = New-Object System.Collections.Generic.HashSet[string]
+        foreach ($line in [System.IO.File]::ReadLines($boardsPath)) {
+            if ($line -match '^([^.\s=]+)\.name=') {
+                [void]$boardIds.Add($matches[1])
+            }
+        }
+
+        if ($boardIds.Count -eq 0) {
+            $status.Add("$($version.Name): WARNING: no board IDs found; secure promptless OTA was not registered.")
+            Write-OptionalFile -Path $boardsLocalPath -Content $boardsContent
+            $configured.Add($version.Name)
+            continue
+        }
+
+        $overrideLines = @($secureOtaBoardsBeginMarker)
+        foreach ($boardId in @($boardIds) | Sort-Object) {
+            $overrideLines += "$boardId.upload.tool.network=espns_ota"
+        }
+        $overrideLines += $secureOtaBoardsEndMarker
+        $overrideBlock = $overrideLines -join [Environment]::NewLine
+
+        if ($boardsContent.Length -gt 0) {
+            $boardsContent = $boardsContent + [Environment]::NewLine + [Environment]::NewLine + $overrideBlock
+        } else {
+            $boardsContent = $overrideBlock
+        }
+        Write-OptionalFile -Path $boardsLocalPath -Content $boardsContent
+
+        $otaConfigured.Add($version.Name)
         $configured.Add($version.Name)
     }
 
@@ -164,6 +219,9 @@ try {
     if ($configured.Count -gt 0) {
         $status.Add("Configured ESP32 core versions:")
         foreach ($item in $configured) { $status.Add("  - $item") }
+        $status.Add("")
+        $status.Add("Secure promptless OTA configured:")
+        foreach ($item in $otaConfigured) { $status.Add("  - $item") }
         $status.Add("")
     }
 
@@ -178,12 +236,14 @@ try {
     }
 
     $status.Add("Result: integration configured successfully.")
-    $status.Add("Restart Arduino IDE before using the network Serial Monitor.")
+    $status.Add("OTA authentication: ESPNS config.json key is injected automatically by the host wrapper; Arduino IDE has no password field.")
+    $status.Add("Restart Arduino IDE before using the network Serial Monitor or OTA upload.")
     $status.Add("After installing a new ESP32 core version, run the repair shortcut again.")
     Write-Status $status
 
     Write-Host "ESPNetworkSerial Arduino integration configured."
     Write-Host "Authentication: provisioned/reused from $ConfigPath"
+    Write-Host "Secure OTA: config-backed authentication registered; no Arduino IDE password prompt"
     Write-Host "Status: $StatusPath"
     exit 0
 }
