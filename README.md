@@ -1,423 +1,249 @@
+<div align="center">
+
 # ESPNetworkSerial
 
-**Wireless Serial Monitor for ESP32, integrated directly with Arduino IDE.**
+**Use the Arduino IDE Serial Monitor over Wi-Fi — with the familiar `Serial` experience.**
 
-ESPNetworkSerial aims to make network serial feel like ordinary Arduino Serial: select your ESP32 network port, open Serial Monitor, and communicate bidirectionally over Wi-Fi — while keeping OTA available on the same device.
+Bidirectional communication · USB + Wi-Fi mirroring · Secure transport · ArduinoOTA support
 
-> **Status:** v0.1.1 is publicly released. Arduino Library Manager registration has been accepted; index propagation is pending.
+[![Latest release](https://img.shields.io/github/v/release/EudoksjuszSzalony/ESPNetworkSerial?label=release)](https://github.com/EudoksjuszSzalony/ESPNetworkSerial/releases/latest)
+[![Host monitor CI](https://github.com/EudoksjuszSzalony/ESPNetworkSerial/actions/workflows/monitor-ci.yml/badge.svg)](https://github.com/EudoksjuszSzalony/ESPNetworkSerial/actions/workflows/monitor-ci.yml)
+[![Firmware CI](https://github.com/EudoksjuszSzalony/ESPNetworkSerial/actions/workflows/firmware-ci.yml/badge.svg)](https://github.com/EudoksjuszSzalony/ESPNetworkSerial/actions/workflows/firmware-ci.yml)
+[![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-## Installation
+[**Download**](#-download) · [**Quick start**](#-quick-start) · [**OTA authentication**](#-ota-authentication) · [**Documentation**](#-documentation)
 
-ESPNetworkSerial has **two parts**:
+</div>
 
-1. the Arduino library used by your ESP32 sketch;
-2. the companion host monitor that integrates the wireless port with Arduino IDE.
+---
 
-### 1. Install the Arduino library
+## What is ESPNetworkSerial?
 
-Once the accepted registry entry has propagated to Arduino Library Manager:
+ESPNetworkSerial brings **Arduino IDE's built-in Serial Monitor to ESP32 over Wi-Fi**. Select the discovered network port and monitor your device without leaving a USB cable connected.
 
-~~~text
+A single `ESPSerial.print()` call can write to both the physical USB serial stream and the network monitor. The same interface also accepts input from either side.
+
+```text
+                              ESP32
+                    ┌─────────────────────┐
+                    │       ESPSerial     │
+                    └──────────┬──────────┘
+                         ┌─────┴─────┐
+                         ▼           ▼
+                     USB Serial    Wi-Fi TCP :3233
+                         │           │
+                         ▼           ▼
+                    Local monitor  ESPNS host monitor
+                                     │
+                                     ▼
+                             Arduino IDE Serial Monitor
+```
+
+**Highlights**
+
+- **Native Arduino IDE workflow** — uses the existing Serial Monitor and discovered network ports.
+- **One `Print` / `Stream` interface** — `print`, `println`, `printf`, `write`, `available`, `read`, `peek`, and `flush`.
+- **USB + Wi-Fi mirroring** with one call; no duplicate logging statements.
+- **Bidirectional data** — input from local Serial or the network monitor.
+- **Authenticated, encrypted transport** — mutual HMAC-SHA256 authentication with AES-256-GCM data records when a key is configured.
+- **Automatic reconnect grace** — the host monitor tolerates short resets or Wi-Fi interruptions.
+- **ArduinoOTA alongside the monitor**, including an optional installer-provisioned OTA credential.
+- **Standalone host binaries** — no Go toolchain needed for end users.
+
+## 📥 Download
+
+**Latest published stable release: [v0.1.2](https://github.com/EudoksjuszSzalony/ESPNetworkSerial/releases/tag/v0.1.2).** The links below point to actual assets in that release.
+
+| Operating system | Setup download | Package |
+|:--|:--|:--|
+| **Windows 10/11 · x64** | **[⬇ Download Windows installer (.exe)](https://github.com/EudoksjuszSzalony/ESPNetworkSerial/releases/download/v0.1.2/espnetworkserial-setup-0.1.2-windows-amd64.exe)** | Graphical installer |
+| **Linux · x64** | [⬇ Download Linux x64 (.tar.gz)](https://github.com/EudoksjuszSzalony/ESPNetworkSerial/releases/download/v0.1.2/espnetworkserial-setup-0.1.2-linux-amd64.tar.gz) | Terminal setup |
+| **Linux · ARM64** | [⬇ Download Linux ARM64 (.tar.gz)](https://github.com/EudoksjuszSzalony/ESPNetworkSerial/releases/download/v0.1.2/espnetworkserial-setup-0.1.2-linux-arm64.tar.gz) | Terminal setup |
+| **macOS · Intel** | [⬇ Download macOS Intel (.tar.gz)](https://github.com/EudoksjuszSzalony/ESPNetworkSerial/releases/download/v0.1.2/espnetworkserial-setup-0.1.2-macos-amd64.tar.gz) | Terminal setup |
+| **macOS · Apple Silicon** | [⬇ Download macOS Apple Silicon (.tar.gz)](https://github.com/EudoksjuszSzalony/ESPNetworkSerial/releases/download/v0.1.2/espnetworkserial-setup-0.1.2-macos-arm64.tar.gz) | Terminal setup |
+
+[**Browse the latest release and all assets →**](https://github.com/EudoksjuszSzalony/ESPNetworkSerial/releases/latest)  
+[Verify downloads with SHA-256 checksums](https://github.com/EudoksjuszSzalony/ESPNetworkSerial/releases/download/v0.1.2/SHA256SUMS.txt) · [All releases](https://github.com/EudoksjuszSzalony/ESPNetworkSerial/releases)
+
+> **Release note:** The two-choice OTA authentication installer page described [below](#-ota-authentication) is currently under development in [PR #3](https://github.com/EudoksjuszSzalony/ESPNetworkSerial/pull/3) and **is not part of published v0.1.2**. For an experimental build, use [Actions → Release](https://github.com/EudoksjuszSzalony/ESPNetworkSerial/actions/workflows/release.yml), select `feature/config-backed-secure-ota`, run the workflow, and download its Windows installer artifact. Workflow artifacts are temporary, so they are not used as permanent download links here.
+
+### Install the host integration
+
+<details>
+<summary><strong>🪟 Windows — graphical setup</strong></summary>
+
+1. Download and run the Windows `.exe` from the table above. Administrator privileges are not normally required.
+2. Let setup register the ESPNS host monitor with detected Arduino ESP32 cores and provision its authentication key.
+3. **Completely restart Arduino IDE** to reload the updated network monitor integration.
+4. If you install/update the ESP32 board package later, use **Start → ESPNetworkSerial → Repair Arduino integration**.
+
+Default install directory: `%LOCALAPPDATA%\Programs\ESPNetworkSerial`.
+
+The installer is currently unsigned; Windows may display a publisher warning. Check the file's SHA-256 hash against the release checksum file.
+
+[Detailed Windows instructions →](docs/windows-installer.md)
+
+</details>
+
+<details>
+<summary><strong>🐧 Linux / 🍎 macOS — terminal setup</strong></summary>
+
+1. Download the setup `.tar.gz` matching your operating system and CPU.
+2. Extract it, open a terminal in the extracted folder, and run:
+
+```bash
+./install.sh
+```
+
+3. Restart Arduino IDE.
+
+To repair the integration after installing a new ESP32 core, run the installed `install.sh --repair`. A normal end-user setup does not require building Go from source.
+
+[Detailed Linux/macOS instructions →](docs/unix-installer.md)
+
+</details>
+
+> The **Arduino library** and the **host setup** are separate components. Install the library through **Arduino IDE → Library Manager → search `ESPNetworkSerial`**, or use a checkout of this repository. The host setup is still required to enable the IDE's wireless Serial Monitor.
+
+## 🚀 Quick start
+
+### 1. Open the included example
+
+In Arduino IDE, go to **File → Examples → ESPNetworkSerial → BasicMonitor**.
+
+Copy `examples/BasicMonitor/secrets.example.h` to `secrets.h` in the example folder and enter your Wi-Fi SSID/password. Do not commit `secrets.h` to Git.
+
+### 2. Upload once over USB
+
+Select your ESP32 board and its **USB serial port**. Upload `BasicMonitor`. The sketch joins Wi-Fi and advertises its ESPNS monitor endpoint with mDNS.
+
+### 3. Open the wireless Serial Monitor
+
+After the ESP32 connects:
+
+```text
 Arduino IDE
-  -> Library Manager
-  -> search: ESPNetworkSerial
-  -> Install
-~~~
+  → Tools → Port → select the discovered ESP32 network port
+  → Serial Monitor
+  → read logs and send data over Wi-Fi ✨
+```
 
-Until indexing finishes, the library can still be installed from this repository in the usual Arduino development workflow.
+`BasicMonitor` is for **monitoring only**. For network firmware uploads too, use the `WirelessOTAAndMonitor` example, which starts ArduinoOTA as well.
 
-### 2. Install the companion host setup
+### 4. Use `ESPSerial` in your own sketch
 
-Download the setup package for your operating system from the latest GitHub Release and run it **once per computer**:
+Connect Wi-Fi before starting ESPNS. The global `ESPSerial` automatically initializes and mirrors the default USB `Serial` at 115200 baud.
 
-~~~text
-Windows     espnetworkserial-setup-<version>-windows-amd64.exe
-Linux x64   espnetworkserial-setup-<version>-linux-amd64.tar.gz
-Linux ARM64 espnetworkserial-setup-<version>-linux-arm64.tar.gz
-macOS Intel espnetworkserial-setup-<version>-macos-amd64.tar.gz
-macOS Apple Silicon
-            espnetworkserial-setup-<version>-macos-arm64.tar.gz
-~~~
-
-The setup installs the host monitor, registers it with detected ESP32 Arduino cores, and provisions the default ESPNS authentication key automatically. Linux/macOS packages use a terminal installer; Windows uses the graphical installer.
-
-After setup:
-
-~~~text
-Restart Arduino IDE
--> select the ESP32 network port
--> open Serial Monitor
-~~~
-
-Normal sketches then only need:
-
-~~~cpp
+```cpp
+#include <WiFi.h>
 #include <ESPNetworkSerial.h>
 
-void setup() {
-    // Connect Wi-Fi first...
-    ESPSerial.begin();
-}
-~~~
-
-The companion setup is required for Arduino IDE network Serial Monitor integration; installing only the Arduino library does not install a host executable into the IDE.
-
-## Why
-
-The project is built around one UX rule: **the sketch should not need duplicate log statements for USB and Wi-Fi.**
-
-The public firmware API is a `Print`/`Stream`-compatible facade. The built-in global `ESPSerial` is the zero-boilerplate path: `ESPSerial.begin()` starts the network transport, initializes Arduino's default `Serial` at 115200, and mirrors the same RX/TX locally and over Wi-Fi:
-
-~~~cpp
-ESPSerial.println("Boot complete");
-~~~
-
-Conceptually:
-
-~~~text
-                 ESPSerial
-                     |
-          +----------+----------+
-          |                     |
-          v                     v
-  Default Serial         Network Serial
-                               |
-                               v
-                      Arduino Serial Monitor
-~~~
-
-## Current firmware API
-
-The normal sketch only needs the single `ESPSerial` object:
-
-~~~cpp
-#include <ESPNetworkSerial.h>
+const char* WIFI_SSID = "YOUR_SSID";
+const char* WIFI_PASSWORD = "YOUR_PASSWORD";
 
 void setup() {
-    // Connect Wi-Fi first...
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(250);
+  }
 
-    // Starts ESPNS and automatically enables/mirrors Arduino Serial at 115200.
-    ESPSerial.begin();
-
-    // Optional: wait up to 12 seconds so early boot logs can reach Wi-Fi Serial.
-    ESPSerial.waitForConnection(12000);
-
-    ESPSerial.println("Hello over USB and Wi-Fi!");
+  ESPSerial.begin();
+  ESPSerial.println("Hello over USB and Wi-Fi!");
 }
 
 void loop() {
-    ESPSerial.handle();
+  ESPSerial.handle();
 
-    if (ESPSerial.available()) {
-        int c = ESPSerial.read();
-        // Input may come from USB Serial or Arduino IDE over Wi-Fi.
-    }
+  if (ESPSerial.available()) {
+    const int byteReceived = ESPSerial.read();
+    if (byteReceived >= 0) ESPSerial.write((uint8_t)byteReceived);
+  }
 }
-~~~
+```
 
-`ESPSerial` owns the TCP transport internally. The global object automatically includes Arduino's default `Serial`, so normal sketches do **not** need `Serial.begin(...)` or `ESPSerial.addStream(Serial)`. Writes go to local Serial and the network with one call; reads are selected fairly across available inputs. Define `ESPNETWORKSERIAL_GLOBAL_SERIAL_MIRROR=0` before including the library to opt out, or override `ESPNETWORKSERIAL_GLOBAL_SERIAL_BAUD` if 115200 is not appropriate.
+This minimal sketch does **not** advertise its own mDNS service. Use the `BasicMonitor` example's `ESPmDNS` setup for automatic discovery in Arduino IDE.
 
-### Custom object name
+**Need your own Serial object?** `ESPNetworkSerial DebugSerial;` is supported. Custom instances manage their attached streams explicitly (for example, `DebugSerial.addStream(Serial)`).
 
-If a project does not want the global `ESPSerial` object, instantiate the facade under any name:
+**Important:** `ESPSerial.waitForConnection()` without a timeout blocks until a monitor connects. Use a timeout (for example, `ESPSerial.waitForConnection(12000)`) or skip it on unattended devices.
 
-~~~cpp
-ESPNetworkSerial DebugSerial;
+## 🔐 OTA authentication
 
-void setup() {
-    Serial.begin(115200);
-    DebugSerial.addStream(Serial);
-    DebugSerial.begin();
-    DebugSerial.println("Custom name, same API.");
-}
+ESPNetworkSerial's **network Serial Monitor encryption** and **ArduinoOTA firmware upload authentication** are related but separate mechanisms.
 
-void loop() {
-    DebugSerial.handle();
-}
-~~~
+The in-development Windows installer offers two ways to authenticate ArduinoOTA uploads:
 
-Custom `ESPNetworkSerial` instances intentionally stay explicit and do not automatically claim the global Arduino `Serial`; this avoids surprising libraries or sketches that need different stream ownership. Transport internals remain available as advanced APIs through `ESPNetworkSerialTCP`, `ESPNetworkSerialMux`, or `DebugSerial.tcp()`, but ordinary sketches do not need them.
+| Mode | Arduino IDE behavior | Firmware requirement |
+|:--|:--|:--|
+| **Autogenerated ESPNS key** | Upload starts without an IDE password prompt. The host OTA wrapper supplies the installer-provisioned key. | `ArduinoOTA` must use the same provisioned key. |
+| **Password** | The stock ESP32 OTA uploader asks for the password in Arduino IDE. | `ArduinoOTA.setPassword(...)` must use the user's chosen password. |
 
-## Examples
+The selected mode is saved in `config.json` as `otaAuthMode` and exported to firmware through the generated `ESPNetworkSerialConfig.h`. Changing OTA mode does **not** change or rotate the network Serial Monitor key.
 
-- **BasicMonitor** — monitor-only example. No ArduinoOTA service is started. It advertises the ESPNS endpoint through mDNS so Arduino IDE can discover the board as a network port for Serial Monitor.
-- **WirelessOTAAndMonitor** — adds ArduinoOTA to the same device and demonstrates OTA + ESPNetworkSerial coexistence. Ordinary application logs use `ESPSerial`; OTA progress/error callbacks intentionally use local `Serial` only to avoid extra traffic during the upload.
-- **CustomInstance** — demonstrates an explicitly named `ESPNetworkSerial` object and manual companion-stream selection.
-- **StressEcho** — transport torture/fault-injection firmware used for hardware validation.
+When installed from a build containing this feature, the Windows Start menu offers:
 
-> In **BasicMonitor**, mDNS discovery is for monitoring only; network OTA upload is not enabled by that sketch. Use **WirelessOTAAndMonitor** when OTA upload is required.
+```text
+ESPNetworkSerial
+└── OTA authentication
+    ├── Use autogenerated HMAC-SHA256 key
+    └── Use Arduino IDE password
+```
 
-### Boot-time wait modes
+Changing modes updates the Arduino integration. Restart Arduino IDE and **rebuild/reflash firmware configured for the chosen mode** before expecting OTA authentication to succeed. See the [WirelessOTAAndMonitor example](examples/WirelessOTAAndMonitor/WirelessOTAAndMonitor.ino) for the corresponding firmware selection.
 
-Waiting is optional:
+> The label **HMAC-SHA256** refers to the OTA authentication handshake, not AES-GCM-encrypted firmware transfer. OTA payload confidentiality is **not** implied. By contrast, authenticated ESPNetworkSerial monitor sessions encrypt their serial payload with AES-256-GCM. See [Security](docs/security.md) for exact guarantees and limitations.
 
-~~~cpp
-// no wait
-// Do not call waitForConnection().
+## 🧩 How it fits together
 
-ESPSerial.waitForConnection(12000); // wait at most 12 seconds
+```text
+ESP32 firmware                              Your computer
+┌────────────────────────┐                 ┌───────────────────────────┐
+│ ESPSerial              │  ESPNS/1 TCP    │ ESPNetworkSerial Monitor  │
+│ Print/Stream ↔ network ├────────────────►│ Arduino IDE integration   │
+│            ↕ USB       │    port 3233    │                           │
+│ ArduinoOTA (optional)  │◄────────────────┤ espota uploader (optional)│
+└────────────────────────┘  OTA port 3232  └───────────────────────────┘
+```
 
-ESPSerial.waitForConnection();      // required: wait indefinitely
-~~~
+ESPNS authenticated sessions use mutual HMAC-SHA256 authentication, HKDF-derived session keys, and AES-256-GCM records. Without an authentication key, raw TCP is unencrypted and should be limited to trusted development environments.
 
-The no-argument form is deliberately blocking. Use the timed or no-wait mode if the board must continue running unattended.
+The installer can generate a random 256-bit key once and provision the matching host `config.json` and firmware `ESPNS_DEFAULT_AUTH_KEY`. **Repair preserves the key; explicit regeneration rotates it.** After rotation, existing firmware must be rebuilt/reflashed to reconnect securely.
 
-### Local Wi-Fi credentials
+## 📚 Documentation
 
-The BasicMonitor example uses a local `secrets.h` file. Copy:
+| Read this | When you need… |
+|:--|:--|
+| [Windows installer](docs/windows-installer.md) | Installation, repair, core upgrades, uninstall |
+| [Linux and macOS setup](docs/unix-installer.md) | Terminal setup and repair |
+| [Security model](docs/security.md) | Authentication, encryption, key management and limitations |
+| [Firmware API stability](docs/api-stability.md) | Stable public API and advanced extension boundaries |
+| [Architecture](docs/architecture.md) | Library/monitor structure |
+| [ESPNS/1 protocol](docs/protocol.md) | Handshake, framing and transport |
+| [Testing and hardening](docs/testing.md) | Stress tests and fault injection |
+| [Release process](docs/releases.md) | Building packages and publishing tags |
 
-~~~text
-examples/BasicMonitor/secrets.example.h
-~~~
+### Examples
 
-to:
+- [BasicMonitor](examples/BasicMonitor) — network Serial Monitor with mDNS, no OTA.
+- [WirelessOTAAndMonitor](examples/WirelessOTAAndMonitor) — monitor plus OTA in one sketch.
+- [CustomInstance](examples/CustomInstance) — separately named serial facade.
+- [StressEcho](examples/StressEcho) — binary stress/fault-injection testing.
 
-~~~text
-examples/BasicMonitor/secrets.h
-~~~
+### Troubleshooting
 
-and fill in your SSID/password once. `secrets.h` is ignored by Git.
+**“No monitor available for the port protocol network”** means Arduino IDE does not have an active network monitor recipe for the selected ESP32 core. Completely close Arduino IDE, run **Repair Arduino integration** (Windows) or the installed `install.sh --repair` (Linux/macOS), then restart the IDE.
 
-## Setup-provisioned authentication
+If OTA authentication fails, first verify that the **installed upload mode**, the **key/password compiled into firmware**, and the **host configuration** agree.
 
-The end-user setup can provision secure ESPNS authentication automatically. On the first install, if no host `config.json` exists, Setup generates a random 256-bit key, stores it in the host config, and writes an installer-managed `ESPNetworkSerialConfig.h` into every detected ESP32 Arduino core.
+Found a bug or need another platform? [Open an issue](https://github.com/EudoksjuszSzalony/ESPNetworkSerial/issues).
 
-That generated header defines:
+## 📄 License
 
-~~~cpp
-#define ESPNS_DEFAULT_AUTH_KEY "..."
-~~~
+[MIT License](LICENSE). Contributions and reproducible bug reports are welcome.
 
-`ESPNetworkSerial.h` imports the header automatically when it is available on the ESP32 core include path. Normal sketches therefore do not need to copy the key manually.
+<div align="center">
 
-Authentication priority is:
+[⬆ Back to top](#espnetworkserial) · [Download latest release](https://github.com/EudoksjuszSzalony/ESPNetworkSerial/releases/latest)
 
-~~~text
-setAuthKey(...) called before begin()
-        ↓
-ESPNS_AUTH_KEY defined by the sketch
-        ↓
-ESPNS_DEFAULT_AUTH_KEY provisioned by Setup
-        ↓
-no key -> auth=none / mode=raw
-~~~
-
-Define `ESPNS_DISABLE_DEFAULT_AUTH_KEY` before including `ESPNetworkSerial.h` to deliberately ignore the machine-local default. A sketch-specific `ESPNS_AUTH_KEY` always takes priority over the generated default.
-
-Compile-time overrides are sketch-local, so `ESPNS_AUTH_KEY` and `ESPNS_DISABLE_DEFAULT_AUTH_KEY` must be defined **before** `#include <ESPNetworkSerial.h>`. The bundled examples include `secrets.h` first for exactly this reason.
-
-Repair operations reuse the existing host key. Key regeneration is an explicit operation because rotating it requires previously compiled ESP32 firmware to be rebuilt/reflashed.
-
-### Selectable ArduinoOTA authentication
-
-Windows Setup now offers two OTA authentication modes:
-
-- **Autogenerated ESPNS key (PBKDF2-HMAC-SHA256)** — Setup reuses the generated 256-bit ESPNS key for ArduinoOTA. The ESPNS host wrapper reads it from `config.json`, the firmware receives the same value through `ESPNetworkSerialConfig.h`, and Arduino IDE uploads without asking for a password.
-- **Arduino IDE password** — Setup leaves the stock ESP32 network uploader in place, so Arduino IDE shows its normal OTA password prompt. The sketch remains responsible for configuring ArduinoOTA with the matching password.
-
-The selected mode is stored as:
-
-~~~json
-{
-  "otaAuthMode": "autogenerated_hmac_sha256"
-}
-~~~
-
-or:
-
-~~~json
-{
-  "otaAuthMode": "password"
-}
-~~~
-
-Setup also writes the selected mode into the installer-managed firmware header:
-
-~~~cpp
-#define ESPNS_OTA_AUTH_MODE_PASSWORD 1
-#define ESPNS_OTA_AUTH_MODE_AUTOGENERATED_HMAC_SHA256 2
-#define ESPNS_OTA_AUTH_MODE ESPNS_OTA_AUTH_MODE_AUTOGENERATED_HMAC_SHA256
-~~~
-
-Applications can therefore select their ArduinoOTA configuration at compile time.
-
-For autogenerated mode:
-
-~~~cpp
-#if ESPNS_OTA_AUTH_MODE == ESPNS_OTA_AUTH_MODE_AUTOGENERATED_HMAC_SHA256
-ArduinoOTA.setPassword(ESPNS_DEFAULT_AUTH_KEY);
-#endif
-~~~
-
-For password mode, applications should use their own local secret, for example `ESPNS_OTA_PASSWORD`, and pass that to `ArduinoOTA.setPassword(...)`.
-
-The Windows Start menu contains two shortcuts under **ESPNetworkSerial -> OTA authentication** so the mode can be changed after installation without reinstalling:
-
-~~~text
-Use autogenerated HMAC-SHA256 key
-Use Arduino IDE password
-~~~
-
-Changing the mode rewrites the managed ESP32 integration and firmware header but does **not** rotate the ESPNS key. Restart Arduino IDE after switching.
-
-In autogenerated mode the upload path is:
-
-~~~text
-config.json authKey
-   +-> host ESPNS OTA wrapper -> espota --auth
-   +-> ESPNetworkSerialConfig.h -> ESPNS_DEFAULT_AUTH_KEY -> firmware
-~~~
-
-**Scope limitation:** Arduino selects the network upload tool at ESP32-core/board level, not per sketch. The installer-managed mode therefore applies to the patched ESP32 core installation. In password mode the stock uploader is restored; in autogenerated mode the ESPNS wrapper is used.
-
-## Optional authentication
-
-
-ESPNetworkSerial can require mutual HMAC-SHA256 authentication before the serial stream opens.
-
-Generate a development key:
-
-~~~powershell
-.\monitor\espnetworkserial-monitor.exe --generate-key
-~~~
-
-Put the same key in the sketch's local `secrets.h`:
-
-~~~cpp
-#define ESPNS_AUTH_KEY "PASTE_GENERATED_KEY_HERE"
-~~~
-
-and in local `monitor/config.json` (copy `monitor/config.example.json` first):
-
-~~~json
-{
-  "authKey": "PASTE_GENERATED_KEY_HERE",
-  "allowUnauthenticated": false
-}
-~~~
-
-Both files containing local credentials are excluded from Git.
-
-Authenticated sessions derive directional keys with HKDF-SHA256 and carry serial data in AES-256-GCM records, providing payload confidentiality and integrity. Unauthenticated sessions remain plaintext `mode=raw`. See [Security](docs/security.md) for guarantees and limitations.
-
-## Reconnect behavior
-
-The host monitor now keeps the Arduino IDE monitor session alive while the ESP32 temporarily disappears and retries the TCP connection for a short grace period (currently 15 seconds). This is intended to cover common board resets and brief Wi-Fi interruptions without forcing the Serial Monitor tab to be closed and reopened.
-
-If the ESP32 cannot be reached before the grace period expires, the monitor reports the port as closed.
-
-## Project goals
-
-- Native Arduino IDE Serial Monitor workflow over Wi-Fi.
-- Bidirectional RX/TX.
-- Arduino OTA and network serial working side by side.
-- One simple `Print`/`Stream`-style API for USB + network output.
-- Open protocol and open-source host monitor.
-- No Python, Node.js, or .NET runtime required by end users.
-- Standalone host binaries for Windows, Linux, and macOS.
-- End-user setup automation for Windows plus terminal-based Linux/macOS installation.
-- Transport/protocol architecture that can be extended without rewriting the monitor.
-
-## Planned architecture
-
-~~~text
-ESP32 sketch
-    |
-    +-- ESPSerial facade
-    |      +-- internal Network transport
-    |      +-- optional USB Serial / other Streams
-    |
-    +-- OTA
-           |
-           v
-      Network port
-           |
-           v
-Arduino IDE <-> ESPNetworkSerialMonitor <-> ESP32
-~~~
-
-The host monitor is implemented in Go and speaks Arduino's Pluggable Monitor protocol over stdin/stdout. In development mode it bridges Arduino IDE's monitor connection to TCP port `3233` on the selected ESP32 network address.
-
-## Repository layout
-
-~~~text
-src/                 Arduino library source
-examples/            Arduino examples
-monitor/             Host monitor source
-installer/           Windows GUI installer + Linux/macOS terminal setup
-docs/                Versioned technical documentation
-.github/             CI/release automation
-library.properties   Arduino library metadata
-~~~
-
-The Arduino library metadata and `src/` directory live at the repository root so the project can later be distributed through Arduino Library Manager. Compiled host binaries will be published as release assets, not committed to the source tree.
-
-## Arduino Library Manager status
-
-The development checkout can already appear under **File -> Examples** and **Sketch -> Include Library** because Arduino scans locally installed libraries. It is not expected to appear in the sidebar **Library Manager** catalog yet: that catalog is populated from Arduino's Library Manager registry/index.
-
-ESPNetworkSerial v0.1.2 is tagged and publicly released. The Arduino Library Manager registration PR was accepted and merged; Arduino's indexer will publish the library to the Library Manager catalog after propagation.
-
-## Documentation
-
-
-- [Architecture](docs/architecture.md)
-- [Protocol specification](docs/protocol.md)
-- [Security](docs/security.md)
-- [Testing and hardening](docs/testing.md)
-- [Firmware API stability](docs/api-stability.md)
-- [Release process](docs/releases.md)
-- [Windows end-user installer](docs/windows-installer.md)
-- [Linux/macOS terminal installer](docs/unix-installer.md)
-- [v0.1 release checklist](docs/v0.1-release-checklist.md)
-- [Adding another transport](docs/adding-a-transport.md)
-- [Windows development setup](docs/development-setup.md)
-
-GitHub Wiki can provide the friendly how-to layer, while `docs/` remains the versioned technical source of truth.
-
-## v0.1 milestone
-
-- [x] Initial ESP32 `Stream` multiplexer
-- [x] Initial bidirectional TCP transport prototype
-- [x] Basic firmware example
-- [x] Host-side Arduino Pluggable Monitor protocol prototype
-- [x] Native Arduino IDE Serial Monitor integration verified end-to-end
-- [x] Network port selected directly from Arduino IDE
-- [x] Boot-time `waitForConnection()` API
-- [x] Short automatic reconnect grace after ESP32 disconnect/reset
-- [x] Local Git-ignored Wi-Fi credentials for examples
-- [x] ESPNS v1 endpoint/version handshake
-- [x] Arduino OTA + network monitor verified simultaneously during upload/reset
-- [x] Optional mutual HMAC-SHA256 authentication handshake
-- [x] Encrypted / integrity-protected AES-256-GCM serial transport
-- [x] Secure stream torture tests (boundaries, tamper, replay, truncation, large bidirectional transfer)
-- [x] Go race-detector CI
-- [x] Real-device binary stress harness (`StressEcho` + `--stress`)
-- [x] Authenticated 5 × 1 MiB real-device stress run with byte-for-byte verification
-- [x] Non-blocking bulk-read path for encrypted records
-- [x] 64 MiB single-session encrypted hardware torture run
-- [x] 100 consecutive authenticated-session hardware torture run
-- [x] Physical-reset fault injection with fresh authenticated-session recovery
-- [x] Live Wi-Fi-loss fault injection with fresh authenticated-session recovery
-- [x] StressEcho SW38 multi-click fault-test selector (stall / Wi-Fi drop / Wi-Fi off / TCP drop / restart)
-- [x] Wi-Fi subsystem-off recovery with ESPNS/ArduinoOTA service restart
-- [x] 8-second application stall survives without ESPNS reconnect
-- [x] TCP-only disconnect recovers through a fresh authenticated session
-- [x] Windows end-user installer build + Arduino core integration tooling
-- [x] Windows end-user installer end-to-end validation on a normal Windows environment
-- [x] First tagged public release (`v0.1.0`)
-- [x] Arduino Library Manager registration accepted and merged; index propagation pending
-- [x] Linux/macOS terminal setup implementation + CI
-- [x] Linux/macOS native CI validation; dedicated user-machine validation deferred to community feedback
-- [x] Host monitor Go tests + cross-platform CI build workflow
-- [x] Automated tagged multi-platform release builds + SHA-256 checksums
-- [ ] Windows/macOS code signing and notarization
-- [x] ESPNS/1 compatibility rules and stable handshake error registry
-- [x] v0.1 facade/advanced API boundary documented
-- [x] v0.1 protocol/public-API compatibility boundary stabilized; advanced transport extension APIs explicitly remain experimental
-
-Development testing has been confirmed with Arduino IDE 2.3.10 and ESP32 Arduino core 3.3.10, including OTA upload with an open Wi-Fi Serial Monitor and automatic monitor reconnection after the ESP32 reboots.
-
-## License
-
-MIT License. See [LICENSE](LICENSE).
+</div>
