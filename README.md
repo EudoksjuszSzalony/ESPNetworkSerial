@@ -11,6 +11,9 @@ Bidirectional communication · USB + Wi-Fi mirroring · Secure transport · Ardu
 [![Firmware CI](https://github.com/EudoksjuszSzalony/ESPNetworkSerial/actions/workflows/firmware-ci.yml/badge.svg)](https://github.com/EudoksjuszSzalony/ESPNetworkSerial/actions/workflows/firmware-ci.yml)
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
+[![Windows installer downloads (v0.1.2)](https://img.shields.io/github/downloads/EudoksjuszSzalony/ESPNetworkSerial/v0.1.2/espnetworkserial-setup-0.1.2-windows-amd64.exe?label=downloads&color=blue)](https://github.com/EudoksjuszSzalony/ESPNetworkSerial/releases/tag/v0.1.2)
+[![Arduino Library Manager statistics](https://img.shields.io/badge/Arduino%20Library%20Manager%20downloads-not%20publicly%20available-lightgrey)](https://groups.google.com/a/arduino.cc/g/developers/c/_g-uvtqg1tg)
+
 [**Download**](#-download) · [**Quick start**](#-quick-start) · [**OTA authentication**](#-ota-authentication) · [**Documentation**](#-documentation)
 
 </div>
@@ -54,13 +57,17 @@ A single `ESPSerial.print()` call can write to both the physical USB serial stre
 
 **Latest published stable release: [v0.1.2](https://github.com/EudoksjuszSzalony/ESPNetworkSerial/releases/tag/v0.1.2).** The links below point to actual assets in that release.
 
-| Operating system | Setup download | Package |
-|:--|:--|:--|
-| **Windows 10/11 · x64** | **[⬇ Download Windows installer (.exe)](https://github.com/EudoksjuszSzalony/ESPNetworkSerial/releases/download/v0.1.2/espnetworkserial-setup-0.1.2-windows-amd64.exe)** | Graphical installer |
-| **Linux · x64** | [⬇ Download Linux x64 (.tar.gz)](https://github.com/EudoksjuszSzalony/ESPNetworkSerial/releases/download/v0.1.2/espnetworkserial-setup-0.1.2-linux-amd64.tar.gz) | Terminal setup |
-| **Linux · ARM64** | [⬇ Download Linux ARM64 (.tar.gz)](https://github.com/EudoksjuszSzalony/ESPNetworkSerial/releases/download/v0.1.2/espnetworkserial-setup-0.1.2-linux-arm64.tar.gz) | Terminal setup |
-| **macOS · Intel** | [⬇ Download macOS Intel (.tar.gz)](https://github.com/EudoksjuszSzalony/ESPNetworkSerial/releases/download/v0.1.2/espnetworkserial-setup-0.1.2-macos-amd64.tar.gz) | Terminal setup |
-| **macOS · Apple Silicon** | [⬇ Download macOS Apple Silicon (.tar.gz)](https://github.com/EudoksjuszSzalony/ESPNetworkSerial/releases/download/v0.1.2/espnetworkserial-setup-0.1.2-macos-arm64.tar.gz) | Terminal setup |
+| Operating system | Setup download | Downloads (v0.1.2) | Package |
+|:--|:--|:--:|:--|
+| **Windows 10/11 · x64** | **[⬇ Download Windows installer (.exe)](https://github.com/EudoksjuszSzalony/ESPNetworkSerial/releases/download/v0.1.2/espnetworkserial-setup-0.1.2-windows-amd64.exe)** | ![Windows installer download count](https://img.shields.io/github/downloads/EudoksjuszSzalony/ESPNetworkSerial/v0.1.2/espnetworkserial-setup-0.1.2-windows-amd64.exe?label=downloads&color=blue) | Graphical installer |
+| **Linux · x64** | [⬇ Download Linux x64 (.tar.gz)](https://github.com/EudoksjuszSzalony/ESPNetworkSerial/releases/download/v0.1.2/espnetworkserial-setup-0.1.2-linux-amd64.tar.gz) | ![Linux x64 setup download count](https://img.shields.io/github/downloads/EudoksjuszSzalony/ESPNetworkSerial/v0.1.2/espnetworkserial-setup-0.1.2-linux-amd64.tar.gz?label=downloads&color=blue) | Terminal setup |
+| **Linux · ARM64** | [⬇ Download Linux ARM64 (.tar.gz)](https://github.com/EudoksjuszSzalony/ESPNetworkSerial/releases/download/v0.1.2/espnetworkserial-setup-0.1.2-linux-arm64.tar.gz) | ![Linux ARM64 setup download count](https://img.shields.io/github/downloads/EudoksjuszSzalony/ESPNetworkSerial/v0.1.2/espnetworkserial-setup-0.1.2-linux-arm64.tar.gz?label=downloads&color=blue) | Terminal setup |
+| **macOS · Intel** | [⬇ Download macOS Intel (.tar.gz)](https://github.com/EudoksjuszSzalony/ESPNetworkSerial/releases/download/v0.1.2/espnetworkserial-setup-0.1.2-macos-amd64.tar.gz) | ![macOS Intel setup download count](https://img.shields.io/github/downloads/EudoksjuszSzalony/ESPNetworkSerial/v0.1.2/espnetworkserial-setup-0.1.2-macos-amd64.tar.gz?label=downloads&color=blue) | Terminal setup |
+| **macOS · Apple Silicon** | [⬇ Download macOS Apple Silicon (.tar.gz)](https://github.com/EudoksjuszSzalony/ESPNetworkSerial/releases/download/v0.1.2/espnetworkserial-setup-0.1.2-macos-arm64.tar.gz) | ![macOS Apple Silicon setup download count](https://img.shields.io/github/downloads/EudoksjuszSzalony/ESPNetworkSerial/v0.1.2/espnetworkserial-setup-0.1.2-macos-arm64.tar.gz?label=downloads&color=blue) | Terminal setup |
+
+**About these statistics:** The live Shields.io badges read GitHub's `download_count` for each **setup file in v0.1.2** (not the separate monitor binary, source archive, or an all-assets total). Badge values may be cached. When publishing another stable release, update the release-specific download links and counters together.
+
+**Arduino Library Manager:** Arduino does not provide a verified public download/installation counter for individual libraries. As a result, no numeric Arduino figure is shown: GitHub release downloads, stars, and repository clones are **not** equivalent to Arduino IDE installs. [Arduino developer discussion of this limitation](https://groups.google.com/a/arduino.cc/g/developers/c/_g-uvtqg1tg).
 
 [**Browse the latest release and all assets →**](https://github.com/EudoksjuszSzalony/ESPNetworkSerial/releases/latest)  
 [Verify downloads with SHA-256 checksums](https://github.com/EudoksjuszSzalony/ESPNetworkSerial/releases/download/v0.1.2/SHA256SUMS.txt) · [All releases](https://github.com/EudoksjuszSzalony/ESPNetworkSerial/releases)
